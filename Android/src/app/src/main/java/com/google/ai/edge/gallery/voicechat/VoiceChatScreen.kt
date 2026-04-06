@@ -3,6 +3,7 @@ package com.google.ai.edge.gallery.voicechat
 import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
@@ -27,7 +28,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -64,9 +64,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import android.content.pm.PackageManager
 import com.google.ai.edge.gallery.data.Model
 import com.google.ai.edge.gallery.ui.llmchat.LlmChatModelHelper
 import kotlinx.coroutines.Dispatchers
@@ -81,10 +79,10 @@ enum class VoiceSender { USER, AI }
 data class VoiceMessage(val sender: VoiceSender, val text: String)
 
 enum class VoiceChatState {
-    IDLE,          // Chờ user bấm mic
-    LISTENING,     // Đang lắng nghe user nói
-    PROCESSING,    // STT xong, đang chạy LLM
-    SPEAKING,      // TTS đang phát audio
+    IDLE,       // Chờ user bấm mic
+    LISTENING,  // Đang lắng nghe
+    PROCESSING, // Đang chạy LLM
+    SPEAKING,   // TTS đang phát
 }
 
 // ── Screen ────────────────────────────────────────────────────────────────────
@@ -92,19 +90,40 @@ enum class VoiceChatState {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VoiceChatScreen(
-    model: Model,
+    model: Model?,
     navigateUp: () -> Unit,
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
+    val scope   = rememberCoroutineScope()
     val listState = rememberLazyListState()
 
-    val messages = remember { mutableStateListOf<VoiceMessage>() }
+    Log.d(TAG, "VoiceChatScreen recompose — model=${model?.name} instance=${model?.instance}")
+
+    // Guard: model null
+    if (model == null) {
+        Log.e(TAG, "model is null — hiển thị màn hình lỗi")
+        Column(
+            modifier = Modifier.fillMaxSize().padding(24.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text("Chưa có model được chọn", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Vui lòng tải model trước rồi quay lại.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        return
+    }
+
+    val messages  = remember { mutableStateListOf<VoiceMessage>() }
     var chatState by remember { mutableStateOf(VoiceChatState.IDLE) }
     var statusText by remember { mutableStateOf("Nhấn mic để bắt đầu nói") }
-    var partialText by remember { mutableStateOf("") } // STT partial result
+    var partialText by remember { mutableStateOf("") }
 
-    // ── Permission ───────────────────────────────────────────────────────
+    // ── Permission ────────────────────────────────────────────────────────
     var hasMicPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
@@ -113,85 +132,130 @@ fun VoiceChatScreen(
     }
     val permLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { granted -> hasMicPermission = granted }
+    ) { granted ->
+        Log.d(TAG, "RECORD_AUDIO permission granted=$granted")
+        hasMicPermission = granted
+    }
 
     // ── TTS Engine ────────────────────────────────────────────────────────
     val ttsEngine = remember {
+        Log.d(TAG, "Creating PiperTtsEngine")
         PiperTtsEngine(context).also { engine ->
             engine.onSpeakingChanged = { speaking ->
+                Log.d(TAG, "onSpeakingChanged speaking=$speaking")
                 if (!speaking) chatState = VoiceChatState.IDLE
             }
-            engine.onAllDone = { chatState = VoiceChatState.IDLE }
+            engine.onAllDone = {
+                Log.d(TAG, "onAllDone — TTS queue empty")
+                chatState = VoiceChatState.IDLE
+            }
         }
     }
     var ttsReady by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
+        Log.d(TAG, "Initializing TTS engine...")
         withContext(Dispatchers.IO) {
-            ttsReady = ttsEngine.init()
-            if (!ttsReady) Log.e(TAG, "TTS init failed — check sherpa-onnx .so and model assets")
+            try {
+                ttsReady = ttsEngine.init()
+                Log.d(TAG, "TTS init result: ttsReady=$ttsReady")
+            } catch (e: Throwable) {
+                Log.e(TAG, "TTS init threw exception", e)
+                ttsReady = false
+            }
         }
     }
 
     // ── SpeechRecognizer ──────────────────────────────────────────────────
-    val recognizer = remember { SpeechRecognizer.createSpeechRecognizer(context) }
-
-    fun buildRecognizerIntent(): Intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-        putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-        putExtra(RecognizerIntent.EXTRA_LANGUAGE, "vi-VN")
-        putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-        // Tự stop sau 1.5s yên lặng, tránh phụ thuộc vào WiFi / Google servers
-        putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L)
-        putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L)
-        putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 500L)
-        // Prefer on-device recognition (Android 13+)
-        putExtra("android.speech.extra.PREFER_OFFLINE", true)
+    val recognizerAvailable = remember {
+        val avail = SpeechRecognizer.isRecognitionAvailable(context)
+        Log.d(TAG, "SpeechRecognizer.isRecognitionAvailable=$avail")
+        avail
+    }
+    val recognizer = remember {
+        Log.d(TAG, "Creating SpeechRecognizer")
+        SpeechRecognizer.createSpeechRecognizer(context)
     }
 
+    fun buildRecognizerIntent(): Intent =
+        Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "vi-VN")
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 500L)
+            putExtra("android.speech.extra.PREFER_OFFLINE", true)
+        }
+
     fun startListening() {
-        if (!hasMicPermission) { permLauncher.launch(Manifest.permission.RECORD_AUDIO); return }
-        if (!SpeechRecognizer.isRecognitionAvailable(context)) {
-            statusText = "Thiết bị không hỗ trợ nhận dạng giọng nói"; return
+        Log.d(TAG, "startListening() — hasMicPermission=$hasMicPermission recognizerAvailable=$recognizerAvailable")
+        if (!hasMicPermission) {
+            permLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            return
+        }
+        if (!recognizerAvailable) {
+            statusText = "Thiết bị không hỗ trợ nhận dạng giọng nói"
+            return
         }
         partialText = ""
-        chatState = VoiceChatState.LISTENING
-        statusText = "Đang nghe..."
+        chatState   = VoiceChatState.LISTENING
+        statusText  = "Đang nghe..."
         recognizer.startListening(buildRecognizerIntent())
     }
 
     fun stopListening() {
+        Log.d(TAG, "stopListening()")
         recognizer.stopListening()
     }
 
-    // ── Run LLM + TTS ─────────────────────────────────────────────────────
+    // ── LLM + TTS ─────────────────────────────────────────────────────────
     fun handleUserSpeech(userText: String) {
-        if (userText.isBlank()) { chatState = VoiceChatState.IDLE; return }
+        Log.d(TAG, "handleUserSpeech: \"${userText.take(80)}\"")
+        if (userText.isBlank()) {
+            Log.w(TAG, "userText blank — reset to IDLE")
+            chatState = VoiceChatState.IDLE
+            return
+        }
         messages.add(VoiceMessage(VoiceSender.USER, userText))
-        chatState = VoiceChatState.PROCESSING
+        chatState  = VoiceChatState.PROCESSING
         statusText = "Đang xử lý..."
 
         scope.launch(Dispatchers.Default) {
-            // Wait until model instance is ready
+            Log.d(TAG, "Waiting for model instance... current=${model.instance}")
             var waited = 0
             while (model.instance == null && waited < 30_000) {
                 kotlinx.coroutines.delay(100); waited += 100
             }
             if (model.instance == null) {
+                Log.e(TAG, "Model instance still null after ${waited}ms")
                 withContext(Dispatchers.Main) {
-                    statusText = "Model chưa sẵn sàng"; chatState = VoiceChatState.IDLE
-                }; return@launch
+                    statusText = "Model chưa sẵn sàng — hãy chờ load xong"
+                    chatState  = VoiceChatState.IDLE
+                }
+                return@launch
             }
+            Log.d(TAG, "Model instance ready, running inference")
 
             val responseBuilder = StringBuilder()
             val done = kotlinx.coroutines.CompletableDeferred<Unit>()
 
             LlmChatModelHelper.runInference(
-                model = model,
-                input = userText,
+                model   = model,
+                input   = userText,
                 resultListener = { partial, isDone, _ ->
-                    if (partial.isNotEmpty()) responseBuilder.append(partial)
-                    if (isDone) done.complete(Unit)
+                    if (partial.isNotEmpty()) {
+                        Log.v(TAG, "LLM partial: \"${partial.take(40)}\"")
+                        responseBuilder.append(partial)
+                    }
+                    if (isDone) {
+                        Log.d(TAG, "LLM done, total length=${responseBuilder.length}")
+                        done.complete(Unit)
+                    }
                 },
-                cleanUpListener = { done.complete(Unit) },
+                cleanUpListener = {
+                    Log.d(TAG, "LLM cleanUp callback")
+                    done.complete(Unit)
+                },
                 onError = { err ->
                     Log.e(TAG, "LLM error: $err")
                     done.complete(Unit)
@@ -200,19 +264,25 @@ fun VoiceChatScreen(
 
             done.await()
             val aiText = responseBuilder.toString().trim()
+            Log.d(TAG, "AI response (${aiText.length} chars): \"${aiText.take(80)}\"")
 
             withContext(Dispatchers.Main) {
                 if (aiText.isNotEmpty()) {
                     messages.add(VoiceMessage(VoiceSender.AI, aiText))
                     if (ttsReady) {
-                        chatState = VoiceChatState.SPEAKING
+                        Log.d(TAG, "Calling ttsEngine.speak()")
+                        chatState  = VoiceChatState.SPEAKING
                         statusText = "Đang nói..."
                         ttsEngine.speak(aiText)
                     } else {
-                        statusText = "TTS chưa sẵn sàng"; chatState = VoiceChatState.IDLE
+                        Log.w(TAG, "TTS not ready — skipping speak")
+                        statusText = "TTS chưa sẵn sàng (thiếu model Piper)"
+                        chatState  = VoiceChatState.IDLE
                     }
                 } else {
-                    chatState = VoiceChatState.IDLE; statusText = "Nhấn mic để bắt đầu nói"
+                    Log.w(TAG, "AI response empty")
+                    chatState  = VoiceChatState.IDLE
+                    statusText = "Nhấn mic để bắt đầu nói"
                 }
             }
         }
@@ -222,60 +292,68 @@ fun VoiceChatScreen(
     DisposableEffect(recognizer) {
         recognizer.setRecognitionListener(object : RecognitionListener {
             override fun onReadyForSpeech(params: Bundle?) {
+                Log.d(TAG, "onReadyForSpeech")
                 statusText = "Đang nghe..."
             }
             override fun onBeginningOfSpeech() {
-                statusText = "Đang nghe..."
+                Log.d(TAG, "onBeginningOfSpeech")
             }
             override fun onRmsChanged(rmsdB: Float) {}
             override fun onBufferReceived(buffer: ByteArray?) {}
             override fun onEndOfSpeech() {
+                Log.d(TAG, "onEndOfSpeech")
                 statusText = "Đang nhận dạng..."
             }
             override fun onPartialResults(partialResults: Bundle?) {
                 val partial = partialResults
                     ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     ?.firstOrNull() ?: ""
+                Log.v(TAG, "onPartialResults: \"$partial\"")
                 partialText = partial
             }
             override fun onResults(results: Bundle?) {
                 val text = results
                     ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     ?.firstOrNull() ?: ""
+                Log.d(TAG, "onResults: \"$text\"")
                 partialText = ""
                 handleUserSpeech(text)
             }
             override fun onError(error: Int) {
                 val msg = when (error) {
-                    SpeechRecognizer.ERROR_NO_MATCH       -> "Không nhận ra giọng nói"
-                    SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "Hết thời gian — thử lại"
-                    SpeechRecognizer.ERROR_AUDIO          -> "Lỗi audio"
-                    SpeechRecognizer.ERROR_NETWORK        -> "Lỗi mạng — kiểm tra kết nối"
-                    SpeechRecognizer.ERROR_NETWORK_TIMEOUT-> "Timeout mạng"
-                    else -> "Lỗi nhận dạng ($error)"
+                    SpeechRecognizer.ERROR_NO_MATCH        -> "Không nhận ra giọng nói"
+                    SpeechRecognizer.ERROR_SPEECH_TIMEOUT  -> "Hết thời gian — thử lại"
+                    SpeechRecognizer.ERROR_AUDIO           -> "Lỗi audio"
+                    SpeechRecognizer.ERROR_NETWORK         -> "Lỗi mạng"
+                    SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Timeout mạng"
+                    SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Recognizer bận"
+                    SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Thiếu quyền microphone"
+                    else -> "Lỗi nhận dạng (code=$error)"
                 }
-                Log.w(TAG, "STT error $error: $msg")
+                Log.w(TAG, "STT onError code=$error: $msg")
                 partialText = ""
-                chatState = VoiceChatState.IDLE
-                statusText = msg
+                chatState   = VoiceChatState.IDLE
+                statusText  = msg
             }
             override fun onEvent(eventType: Int, params: Bundle?) {}
             override fun onSegmentResults(segmentResults: Bundle) {}
             override fun onEndOfSegmentedSession() {}
         })
         onDispose {
+            Log.d(TAG, "Disposing recognizer")
             recognizer.destroy()
         }
     }
 
-    // ── Cleanup on leave ──────────────────────────────────────────────────
+    // ── Cleanup ───────────────────────────────────────────────────────────
     DisposableEffect(Unit) {
         onDispose {
+            Log.d(TAG, "Disposing ttsEngine")
             ttsEngine.shutdown()
         }
     }
 
-    // Auto-scroll to bottom
+    // Auto-scroll
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1)
     }
@@ -290,7 +368,7 @@ fun VoiceChatScreen(
                         Text(
                             model.name,
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color  = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 },
@@ -307,32 +385,24 @@ fun VoiceChatScreen(
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            // ── Message list ──────────────────────────────────────────────
             LazyColumn(
-                state = listState,
-                modifier = Modifier
+                state     = listState,
+                modifier  = Modifier
                     .weight(1f)
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 item { Spacer(Modifier.height(8.dp)) }
-                items(messages) { msg ->
-                    MessageBubble(msg)
-                }
-                // Show partial STT result while listening
+                items(messages) { msg -> MessageBubble(msg) }
                 if (partialText.isNotEmpty()) {
                     item {
-                        MessageBubble(
-                            VoiceMessage(VoiceSender.USER, partialText),
-                            isPartial = true,
-                        )
+                        MessageBubble(VoiceMessage(VoiceSender.USER, partialText), isPartial = true)
                     }
                 }
                 item { Spacer(Modifier.height(8.dp)) }
             }
 
-            // ── Status + controls ─────────────────────────────────────────
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -340,35 +410,32 @@ fun VoiceChatScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                // Status text
                 Text(
-                    text = statusText,
+                    text  = statusText,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-
-                // Processing indicator
                 if (chatState == VoiceChatState.PROCESSING) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        strokeWidth = 2.dp,
-                    )
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
                 }
-
-                // Mic FAB
                 MicButton(
-                    state = chatState,
-                    ttsReady = ttsReady,
+                    state            = chatState,
+                    ttsReady         = ttsReady,
                     onStartListening = { startListening() },
                     onStopListening  = { stopListening() },
-                    onStopSpeaking   = { ttsEngine.stop(); chatState = VoiceChatState.IDLE; statusText = "Nhấn mic để bắt đầu nói" },
+                    onStopSpeaking   = {
+                        Log.d(TAG, "User stopped TTS")
+                        ttsEngine.stop()
+                        chatState  = VoiceChatState.IDLE
+                        statusText = "Nhấn mic để bắt đầu nói"
+                    },
                 )
             }
         }
     }
 }
 
-// ── Message bubble ────────────────────────────────────────────────────────────
+// ── Composables ───────────────────────────────────────────────────────────────
 
 @Composable
 private fun MessageBubble(message: VoiceMessage, isPartial: Boolean = false) {
@@ -380,10 +447,10 @@ private fun MessageBubble(message: VoiceMessage, isPartial: Boolean = false) {
         Card(
             modifier = Modifier.fillMaxWidth(0.82f),
             shape = RoundedCornerShape(
-                topStart = if (isUser) 16.dp else 4.dp,
-                topEnd = if (isUser) 4.dp else 16.dp,
+                topStart    = if (isUser) 16.dp else 4.dp,
+                topEnd      = if (isUser) 4.dp else 16.dp,
                 bottomStart = 16.dp,
-                bottomEnd = 16.dp,
+                bottomEnd   = 16.dp,
             ),
             colors = CardDefaults.cardColors(
                 containerColor = if (isUser)
@@ -394,7 +461,7 @@ private fun MessageBubble(message: VoiceMessage, isPartial: Boolean = false) {
         ) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Text(
-                    text = if (isUser) "Bạn" else "AI",
+                    text  = if (isUser) "Bạn" else "AI",
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
                     color = if (isUser)
@@ -404,7 +471,7 @@ private fun MessageBubble(message: VoiceMessage, isPartial: Boolean = false) {
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = message.text,
+                    text  = message.text,
                     style = MaterialTheme.typography.bodyMedium,
                     color = if (isPartial)
                         MaterialTheme.colorScheme.onSurfaceVariant
@@ -416,8 +483,6 @@ private fun MessageBubble(message: VoiceMessage, isPartial: Boolean = false) {
     }
 }
 
-// ── Mic button ────────────────────────────────────────────────────────────────
-
 @Composable
 private fun MicButton(
     state: VoiceChatState,
@@ -428,7 +493,8 @@ private fun MicButton(
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
     val scale by infiniteTransition.animateFloat(
-        initialValue = 1f, targetValue = 1.15f,
+        initialValue = 1f,
+        targetValue  = 1.15f,
         animationSpec = infiniteRepeatable(
             tween(600, easing = LinearEasing), RepeatMode.Reverse
         ),
@@ -436,7 +502,6 @@ private fun MicButton(
     )
 
     Box(contentAlignment = Alignment.Center) {
-        // Pulsing ring when listening
         if (state == VoiceChatState.LISTENING) {
             Box(
                 modifier = Modifier
@@ -448,7 +513,6 @@ private fun MicButton(
                     )
             )
         }
-
         FloatingActionButton(
             onClick = when (state) {
                 VoiceChatState.IDLE       -> onStartListening
@@ -456,7 +520,7 @@ private fun MicButton(
                 VoiceChatState.SPEAKING   -> onStopSpeaking
                 VoiceChatState.PROCESSING -> { {} }
             },
-            modifier = Modifier.size(64.dp),
+            modifier       = Modifier.size(64.dp),
             containerColor = when (state) {
                 VoiceChatState.IDLE       -> MaterialTheme.colorScheme.primary
                 VoiceChatState.LISTENING  -> Color(0xFFE53935)
@@ -466,22 +530,22 @@ private fun MicButton(
         ) {
             Icon(
                 imageVector = when (state) {
-                    VoiceChatState.IDLE, VoiceChatState.PROCESSING -> Icons.Outlined.Mic
-                    VoiceChatState.LISTENING -> Icons.Outlined.Stop
-                    VoiceChatState.SPEAKING  -> Icons.Outlined.Stop
+                    VoiceChatState.IDLE,
+                    VoiceChatState.PROCESSING -> Icons.Outlined.Mic
+                    VoiceChatState.LISTENING,
+                    VoiceChatState.SPEAKING   -> Icons.Outlined.Stop
                 },
                 contentDescription = null,
-                tint = Color.White,
+                tint     = Color.White,
                 modifier = Modifier.size(28.dp),
             )
         }
     }
 
-    // TTS not ready warning
     if (!ttsReady) {
         Spacer(Modifier.height(4.dp))
         Text(
-            "⚠ TTS chưa sẵn sàng — kiểm tra model assets",
+            "⚠ TTS chưa sẵn sàng — thiếu model Piper trong assets",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.error,
         )

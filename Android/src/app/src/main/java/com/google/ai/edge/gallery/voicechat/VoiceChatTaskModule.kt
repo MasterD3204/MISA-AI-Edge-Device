@@ -69,7 +69,7 @@ class VoiceChatTask @Inject constructor() : CustomTask {
     val model = uiState.selectedModel
 
     VoiceChatScreen(
-      model = model,
+      model = model,  // nullable — VoiceChatScreen tự xử lý null
       navigateUp = myData.onNavUp,
     )
   }
