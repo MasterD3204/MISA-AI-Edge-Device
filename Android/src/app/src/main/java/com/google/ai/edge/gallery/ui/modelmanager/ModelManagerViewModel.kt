@@ -79,7 +79,56 @@ private const val MODEL_ALLOWLIST_TEST_FILENAME = "model_allowlist_test.json"
 private const val ALLOWLIST_BASE_URL =
   "https://raw.githubusercontent.com/google-ai-edge/gallery/refs/heads/main/model_allowlists"
 
-private const val TEST_MODEL_ALLOW_LIST = ""
+private const val TEST_MODEL_ALLOW_LIST = """
+{
+  "models": [
+    {
+      "name": "Gemma-4-E2B-it",
+      "modelId": "litert-community/gemma-4-E2B-it-litert-lm",
+      "modelFile": "gemma-4-E2B-it.litertlm",
+      "commitHash": "7fa1d78473894f7e736a21d920c3aa80f950c0db",
+      "description": "Phiên bản Gemma 4 E2B hỗ trợ đa phương thức (văn bản, hình ảnh, âm thanh) với context length lên đến 32K.",
+      "sizeInBytes": 2583085056,
+      "minDeviceMemoryInGb": 8,
+      "llmSupportImage": true,
+      "llmSupportAudio": true,
+      "llmSupportThinking": true,
+      "defaultConfig": {
+        "topK": 64,
+        "topP": 0.95,
+        "temperature": 1.0,
+        "maxContextLength": 32000,
+        "maxTokens": 4000,
+        "accelerators": "gpu,cpu",
+        "visionAccelerator": "gpu"
+      },
+      "taskTypes": ["llm_chat", "llm_agent_chat"]
+    },
+    {
+      "name": "Gemma-4-E4B-it",
+      "modelId": "litert-community/gemma-4-E4B-it-litert-lm",
+      "modelFile": "gemma-4-E4B-it.litertlm",
+      "commitHash": "9695417f248178c63a9f318c6e0c56cb917cb837",
+      "description": "Phiên bản Gemma 4 E4B hỗ trợ đa phương thức (văn bản, hình ảnh, âm thanh) với context length lên đến 32K.",
+      "sizeInBytes": 3654467584,
+      "minDeviceMemoryInGb": 12,
+      "llmSupportImage": true,
+      "llmSupportAudio": true,
+      "llmSupportThinking": true,
+      "defaultConfig": {
+        "topK": 64,
+        "topP": 0.95,
+        "temperature": 1.0,
+        "maxContextLength": 32000,
+        "maxTokens": 4000,
+        "accelerators": "gpu,cpu",
+        "visionAccelerator": "gpu"
+      },
+      "taskTypes": ["llm_chat", "llm_agent_chat"]
+    }
+  ]
+}
+"""
 
 data class ModelInitializationStatus(
   val status: ModelInitializationStatusType,
