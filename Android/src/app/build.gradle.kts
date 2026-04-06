@@ -33,7 +33,7 @@ android {
   compileSdk = 35
 
   defaultConfig {
-    applicationId = "com.google.ai.edge.gallery"
+    applicationId = "com.misa.ai.edge.device"
     minSdk = 31
     targetSdk = 35
     versionCode = 23
