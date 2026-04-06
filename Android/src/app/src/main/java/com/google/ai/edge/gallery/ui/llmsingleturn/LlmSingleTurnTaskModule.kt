@@ -16,74 +16,11 @@
 
 package com.google.ai.edge.gallery.ui.llmsingleturn
 
-import android.content.Context
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Widgets
-import androidx.compose.runtime.Composable
-import com.google.ai.edge.gallery.R
-import com.google.ai.edge.gallery.customtasks.common.CustomTask
-import com.google.ai.edge.gallery.customtasks.common.CustomTaskDataForBuiltinTask
-import com.google.ai.edge.gallery.data.BuiltInTaskId
-import com.google.ai.edge.gallery.data.Category
-import com.google.ai.edge.gallery.data.Model
-import com.google.ai.edge.gallery.data.Task
-import com.google.ai.edge.gallery.ui.llmchat.LlmChatModelHelper
 import dagger.Module
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 
-class LlmSingleTurnTask @Inject constructor() : CustomTask {
-  override val task: Task =
-    Task(
-      id = BuiltInTaskId.LLM_PROMPT_LAB,
-      label = "Prompt Lab",
-      category = Category.LLM,
-      icon = Icons.Outlined.Widgets,
-      models = mutableListOf(),
-      description = "Single turn use cases with on-device large language models",
-      shortDescription = "Single turn use cases",
-      docUrl = "https://github.com/google-ai-edge/LiteRT-LM/blob/main/kotlin/README.md",
-      sourceCodeUrl =
-        "https://github.com/google-ai-edge/gallery/blob/main/Android/src/app/src/main/java/com/google/ai/edge/gallery/ui/llmchat/LlmChatModelHelper.kt",
-      textInputPlaceHolderRes = R.string.text_input_placeholder_llm_chat,
-    )
-
-  override fun initializeModelFn(
-    context: Context,
-    coroutineScope: CoroutineScope,
-    model: Model,
-    onDone: (String) -> Unit,
-  ) {
-    LlmChatModelHelper.initialize(
-      context = context,
-      model = model,
-      supportImage = false,
-      supportAudio = false,
-      onDone = onDone,
-    )
-  }
-
-  override fun cleanUpModelFn(
-    context: Context,
-    coroutineScope: CoroutineScope,
-    model: Model,
-    onDone: () -> Unit,
-  ) {
-    LlmChatModelHelper.cleanUp(model = model, onDone = onDone)
-  }
-
-  @Composable
-  override fun MainScreen(data: Any) {
-    val myData = data as CustomTaskDataForBuiltinTask
-    LlmSingleTurnScreen(
-      modelManagerViewModel = myData.modelManagerViewModel,
-      navigateUp = myData.onNavUp,
-    )
-  }
-}
-
+// LlmSingleTurnTask (Prompt Lab) removed - not included in MISA AI Edge Device
 @Module
-@InstallIn(SingletonComponent::class) // Or another component that fits your scope
-internal object LlmSingleTurnTaskModule {
-  // LlmSingleTurnTask (Prompt Lab) removed - not included in MISA AI Edge Device
-}
+@InstallIn(SingletonComponent::class)
+internal object LlmSingleTurnTaskModule
