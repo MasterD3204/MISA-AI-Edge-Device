@@ -71,15 +71,6 @@ android {
     resources {
       excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
-    jniLibs {
-      useLegacyPackaging = true
-      pickFirsts += setOf(
-        "lib/x86/libonnxruntime.so",
-        "lib/x86_64/libonnxruntime.so",
-        "lib/armeabi-v7a/libonnxruntime.so",
-        "lib/arm64-v8a/libonnxruntime.so"
-      )
-    }
   }
 }
 
