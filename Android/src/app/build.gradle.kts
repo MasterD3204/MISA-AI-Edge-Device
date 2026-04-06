@@ -30,6 +30,11 @@ plugins {
 
 android {
   namespace = "com.google.ai.edge.gallery"
+
+  // Local .aar files in app/libs/
+  repositories {
+    flatDir { dirs("libs") }
+  }
   compileSdk = 35
 
   defaultConfig {
@@ -66,11 +71,6 @@ android {
   buildFeatures {
     compose = true
     buildConfig = true
-  }
-  packaging {
-    resources {
-      excludes += "/META-INF/{AL2.0,LGPL2.1}"
-    }
   }
 }
 
@@ -114,6 +114,8 @@ dependencies {
   implementation(libs.firebase.messaging)
   implementation(libs.androidx.exifinterface)
   implementation(libs.moshi.kotlin)
+  // Sherpa-onnx local AAR (Piper TTS)
+  implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar"))))
   kapt(libs.hilt.android.compiler)
   testImplementation(libs.junit)
   androidTestImplementation(libs.androidx.junit)
