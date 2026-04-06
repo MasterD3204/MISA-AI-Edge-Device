@@ -30,11 +30,6 @@ plugins {
 
 android {
   namespace = "com.google.ai.edge.gallery"
-
-  // Local .aar files in app/libs/
-  repositories {
-    flatDir { dirs("libs") }
-  }
   compileSdk = 35
 
   defaultConfig {
