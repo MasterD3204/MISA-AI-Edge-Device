@@ -24,8 +24,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Forum
-import androidx.compose.material.icons.outlined.Mic
-import androidx.compose.material.icons.outlined.Mms
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -63,8 +61,8 @@ class LlmChatTask @Inject constructor() : CustomTask {
       category = Category.LLM,
       icon = Icons.Outlined.Forum,
       models = mutableListOf(),
-      description = "Chat with on-device large language models",
-      shortDescription = "Chat with an on-device LLM",
+      description = "Trò chuyện với AI on-device, hỗ trợ ảnh và âm thanh",
+      shortDescription = "Trò chuyện với AI on-device",
       docUrl = "https://github.com/google-ai-edge/LiteRT-LM/blob/main/kotlin/README.md",
       sourceCodeUrl =
         "https://github.com/google-ai-edge/gallery/blob/main/Android/src/app/src/main/java/com/google/ai/edge/gallery/ui/llmchat/LlmChatModelHelper.kt",
@@ -80,8 +78,8 @@ class LlmChatTask @Inject constructor() : CustomTask {
     model.runtimeHelper.initialize(
       context = context,
       model = model,
-      supportImage = false,
-      supportAudio = false,
+      supportImage = true,
+      supportAudio = true,
       onDone = onDone,
       coroutineScope = coroutineScope,
     )
@@ -135,130 +133,19 @@ internal object LlmChatTaskModule {
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-// Ask image.
-
-class LlmAskImageTask @Inject constructor() : CustomTask {
-  override val task: Task =
-    Task(
-      id = BuiltInTaskId.LLM_ASK_IMAGE,
-      label = "Ask Image",
-      category = Category.LLM,
-      icon = Icons.Outlined.Mms,
-      models = mutableListOf(),
-      description = "Ask questions about images with on-device large language models",
-      shortDescription = "Ask questions about images",
-      docUrl = "https://github.com/google-ai-edge/LiteRT-LM/blob/main/kotlin/README.md",
-      sourceCodeUrl =
-        "https://github.com/google-ai-edge/gallery/blob/main/Android/src/app/src/main/java/com/google/ai/edge/gallery/ui/llmchat/LlmChatModelHelper.kt",
-      textInputPlaceHolderRes = R.string.text_input_placeholder_llm_chat,
-    )
-
-  override fun initializeModelFn(
-    context: Context,
-    coroutineScope: CoroutineScope,
-    model: Model,
-    onDone: (String) -> Unit,
-  ) {
-    model.runtimeHelper.initialize(
-      context = context,
-      model = model,
-      supportImage = true,
-      supportAudio = false,
-      onDone = onDone,
-      coroutineScope = coroutineScope,
-    )
-  }
-
-  override fun cleanUpModelFn(
-    context: Context,
-    coroutineScope: CoroutineScope,
-    model: Model,
-    onDone: () -> Unit,
-  ) {
-    model.runtimeHelper.cleanUp(model = model, onDone = onDone)
-  }
-
-  @Composable
-  override fun MainScreen(data: Any) {
-    val myData = data as CustomTaskDataForBuiltinTask
-    LlmAskImageScreen(
-      modelManagerViewModel = myData.modelManagerViewModel,
-      navigateUp = myData.onNavUp,
-    )
-  }
-}
+// Ask image - Removed: image support is now integrated into AI Chat.
 
 @Module
 @InstallIn(SingletonComponent::class) // Or another component that fits your scope
 internal object LlmAskImageModule {
-  @Provides
-  @IntoSet
-  fun provideTask(): CustomTask {
-    return LlmAskImageTask()
-  }
+  // LlmAskImageTask removed - image support merged into AI Chat
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-// Ask audio.
-
-class LlmAskAudioTask @Inject constructor() : CustomTask {
-  override val task: Task =
-    Task(
-      id = BuiltInTaskId.LLM_ASK_AUDIO,
-      label = "Audio Scribe",
-      category = Category.LLM,
-      icon = Icons.Outlined.Mic,
-      models = mutableListOf(),
-      description =
-        "Instantly transcribe and/or translate audio clips using on-device large language models",
-      shortDescription = "Transcribe and translate audio",
-      docUrl = "https://github.com/google-ai-edge/LiteRT-LM/blob/main/kotlin/README.md",
-      sourceCodeUrl =
-        "https://github.com/google-ai-edge/gallery/blob/main/Android/src/app/src/main/java/com/google/ai/edge/gallery/ui/llmchat/LlmChatModelHelper.kt",
-      textInputPlaceHolderRes = R.string.text_input_placeholder_llm_chat,
-    )
-
-  override fun initializeModelFn(
-    context: Context,
-    coroutineScope: CoroutineScope,
-    model: Model,
-    onDone: (String) -> Unit,
-  ) {
-    model.runtimeHelper.initialize(
-      context = context,
-      model = model,
-      supportImage = false,
-      supportAudio = true,
-      onDone = onDone,
-      coroutineScope = coroutineScope,
-    )
-  }
-
-  override fun cleanUpModelFn(
-    context: Context,
-    coroutineScope: CoroutineScope,
-    model: Model,
-    onDone: () -> Unit,
-  ) {
-    model.runtimeHelper.cleanUp(model = model, onDone = onDone)
-  }
-
-  @Composable
-  override fun MainScreen(data: Any) {
-    val myData = data as CustomTaskDataForBuiltinTask
-    LlmAskAudioScreen(
-      modelManagerViewModel = myData.modelManagerViewModel,
-      navigateUp = myData.onNavUp,
-    )
-  }
-}
+// Ask audio - Removed: audio support is now integrated into AI Chat.
 
 @Module
 @InstallIn(SingletonComponent::class) // Or another component that fits your scope
 internal object LlmAskAudioModule {
-  @Provides
-  @IntoSet
-  fun provideTask(): CustomTask {
-    return LlmAskAudioTask()
-  }
+  // LlmAskAudioTask removed - audio support merged into AI Chat
 }

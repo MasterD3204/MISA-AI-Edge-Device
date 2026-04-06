@@ -29,12 +29,8 @@ import com.google.ai.edge.gallery.data.Model
 import com.google.ai.edge.gallery.data.Task
 import com.google.ai.edge.gallery.ui.llmchat.LlmChatModelHelper
 import dagger.Module
-import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
-import dagger.multibindings.IntoSet
-import javax.inject.Inject
-import kotlinx.coroutines.CoroutineScope
 
 class LlmSingleTurnTask @Inject constructor() : CustomTask {
   override val task: Task =
@@ -89,9 +85,5 @@ class LlmSingleTurnTask @Inject constructor() : CustomTask {
 @Module
 @InstallIn(SingletonComponent::class) // Or another component that fits your scope
 internal object LlmSingleTurnTaskModule {
-  @Provides
-  @IntoSet
-  fun provideTask(): CustomTask {
-    return LlmSingleTurnTask()
-  }
+  // LlmSingleTurnTask (Prompt Lab) removed - not included in MISA AI Edge Device
 }

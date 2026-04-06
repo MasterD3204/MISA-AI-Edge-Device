@@ -72,14 +72,14 @@ fun GemmaTermsOfUseDialog(
         Column(modifier = Modifier.verticalScroll(rememberScrollState()).weight(1f, fill = false)) {
           Text(
             buildAnnotatedString {
-              append("Gemma models on the Google AI Edge Gallery app are governed by the ")
+              append("Các mô hình Gemma trên ứng dụng MISA AI Edge Device được điều chỉnh bởi ")
               append(
                 buildTrackableUrlAnnotatedString(
                   url = "https://ai.google.dev/gemma/terms",
-                  linkText = "Gemma Terms of Service",
+                  linkText = "Điều khoản dịch vụ Gemma",
                 )
               )
-              append(". Please review these terms and ensure you agree before continuing.")
+              append(". Vui lòng xem xét các điều khoản này và đảm bảo bạn đồng ý trước khi tiếp tục.")
             },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,

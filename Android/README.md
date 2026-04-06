@@ -1,1 +1,1 @@
-# Google AI Edge Gallery (Android)
+# MISA AI Edge Device (Android)

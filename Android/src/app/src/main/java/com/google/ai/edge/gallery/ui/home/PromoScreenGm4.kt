@@ -89,7 +89,7 @@ fun PromoScreenGm4(onDismiss: () -> Unit) {
       // Center text.
       Image(ImageVector.vectorResource(R.drawable.gemini_star), contentDescription = null)
       Text(
-        "Introducing",
+        "Giới thiệu",
         style = MaterialTheme.typography.headlineSmall.copy(fontSize = 20.sp),
         color = Color.White,
       )
@@ -99,7 +99,7 @@ fun PromoScreenGm4(onDismiss: () -> Unit) {
         color = Color.White,
       )
       Text(
-        "Experience the world’s most capable open models, designed to run frontier-level intelligence directly on your hardware.",
+        "Trải nghiệm những mô hình mã nguồn mở mạnh mẽ nhất thế giới, được thiết kế để chạy trí tuệ tiên tiến trực tiếp trên phần cứng của bạn.",
         style = MaterialTheme.typography.headlineSmall.copy(fontSize = 16.sp, lineHeight = 21.sp),
         textAlign = TextAlign.Center,
         color = Color(0xfff2f2f2),
@@ -107,7 +107,7 @@ fun PromoScreenGm4(onDismiss: () -> Unit) {
 
       // Dismiss button.
       TextButton(onClick = onDismiss, modifier = Modifier.padding(top = 24.dp)) {
-        Text("Dismiss", color = Color(0xFFA8C7FA))
+        Text("Bỏ qua", color = Color(0xFFA8C7FA))
       }
     }
   }

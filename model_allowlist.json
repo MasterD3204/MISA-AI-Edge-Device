@@ -1,74 +1,54 @@
 {
   "models": [
     {
-      "name": "Gemma-3n-E2B-it-int4",
-      "modelId": "google/gemma-3n-E2B-it-litert-preview",
-      "modelFile": "gemma-3n-E2B-it-int4.task",
-      "description": "Preview version of [Gemma 3n E2B](https://ai.google.dev/gemma/docs/gemma-3n) ready for deployment on Android using the [MediaPipe LLM Inference API](https://ai.google.dev/edge/mediapipe/solutions/genai/llm_inference). The current checkpoint only supports text and vision input, with 4096 context length.",
-      "sizeInBytes": 3136226711,
-      "estimatedPeakMemoryInBytes": 5905580032,
-      "version": "20250520",
+      "name": "Gemma-4-E2B-it",
+      "modelId": "litert-community/gemma-4-E2B-it-litert-lm",
+      "modelFile": "gemma-4-E2B-it.litertlm",
+      "description": "Phiên bản Gemma 4 E2B sẵn sàng triển khai trên Android. Hỗ trợ đầu vào đa phương thức (văn bản, hình ảnh, âm thanh) với context length lên đến 32K.",
+      "sizeInBytes": 2583085056,
+      "minDeviceMemoryInGb": 8,
+      "commitHash": "7fa1d78473894f7e736a21d920c3aa80f950c0db",
       "llmSupportImage": true,
+      "llmSupportAudio": true,
+      "llmSupportThinking": true,
       "defaultConfig": {
         "topK": 64,
         "topP": 0.95,
         "temperature": 1.0,
-        "maxTokens": 4096,
-        "accelerators": "cpu,gpu"
+        "maxContextLength": 32000,
+        "maxTokens": 4000,
+        "accelerators": "gpu,cpu",
+        "visionAccelerator": "gpu"
       },
-      "taskTypes": ["llm_chat", "llm_prompt_lab", "llm_ask_image"]
+      "taskTypes": [
+        "llm_chat",
+        "llm_agent_chat"
+      ]
     },
     {
-      "name": "Gemma-3n-E4B-it-int4",
-      "modelId": "google/gemma-3n-E4B-it-litert-preview",
-      "modelFile": "gemma-3n-E4B-it-int4.task",
-      "description": "Preview version of [Gemma 3n E4B](https://ai.google.dev/gemma/docs/gemma-3n) ready for deployment on Android using the [MediaPipe LLM Inference API](https://ai.google.dev/edge/mediapipe/solutions/genai/llm_inference). The current checkpoint only supports text and vision input, with 4096 context length.",
-      "sizeInBytes": 4405655031,
-      "estimatedPeakMemoryInBytes": 6979321856,
-      "version": "20250520",
+      "name": "Gemma-4-E4B-it",
+      "modelId": "litert-community/gemma-4-E4B-it-litert-lm",
+      "modelFile": "gemma-4-E4B-it.litertlm",
+      "description": "Phiên bản Gemma 4 E4B sẵn sàng triển khai trên Android. Hỗ trợ đầu vào đa phương thức (văn bản, hình ảnh, âm thanh) với context length lên đến 32K.",
+      "sizeInBytes": 3654467584,
+      "minDeviceMemoryInGb": 12,
+      "commitHash": "9695417f248178c63a9f318c6e0c56cb917cb837",
       "llmSupportImage": true,
+      "llmSupportAudio": true,
+      "llmSupportThinking": true,
       "defaultConfig": {
         "topK": 64,
         "topP": 0.95,
         "temperature": 1.0,
-        "maxTokens": 4096,
-        "accelerators": "cpu,gpu"
+        "maxContextLength": 32000,
+        "maxTokens": 4000,
+        "accelerators": "gpu,cpu",
+        "visionAccelerator": "gpu"
       },
-      "taskTypes": ["llm_chat", "llm_prompt_lab", "llm_ask_image"]
-    },
-    {
-      "name": "Gemma3-1B-IT q4",
-      "modelId": "litert-community/Gemma3-1B-IT",
-      "modelFile": "Gemma3-1B-IT_multi-prefill-seq_q4_ekv2048.task",
-      "description": "A variant of [google/Gemma-3-1B-IT](https://huggingface.co/google/Gemma-3-1B-IT) with 4-bit quantization ready for deployment on Android using the [MediaPipe LLM Inference API](https://ai.google.dev/edge/mediapipe/solutions/genai/llm_inference)",
-      "sizeInBytes": 554661246,
-      "estimatedPeakMemoryInBytes": 2147483648,
-      "version": "20250514",
-      "defaultConfig": {
-        "topK": 64,
-        "topP": 0.95,
-        "temperature": 1.0,
-        "maxTokens": 1024,
-        "accelerators": "gpu,cpu"
-      },
-      "taskTypes": ["llm_chat", "llm_prompt_lab"]
-    },
-    {
-      "name": "Qwen2.5-1.5B-Instruct q8",
-      "modelId": "litert-community/Qwen2.5-1.5B-Instruct",
-      "modelFile": "Qwen2.5-1.5B-Instruct_multi-prefill-seq_q8_ekv1280.task",
-      "description": "A variant of [Qwen/Qwen2.5-1.5B-Instruct](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct) with 8-bit quantization ready for deployment on Android using the [MediaPipe LLM Inference API](https://ai.google.dev/edge/mediapipe/solutions/genai/llm_inference)",
-      "sizeInBytes": 1625493432,
-      "estimatedPeakMemoryInBytes": 2684354560,
-      "version": "20250514",
-      "defaultConfig": {
-        "topK": 40,
-        "topP": 0.95,
-        "temperature": 1.0,
-        "maxTokens": 1024,
-        "accelerators": "cpu"
-      },
-      "taskTypes": ["llm_chat", "llm_prompt_lab"]
+      "taskTypes": [
+        "llm_chat",
+        "llm_agent_chat"
+      ]
     }
   ]
 }

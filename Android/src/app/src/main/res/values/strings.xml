@@ -20,17 +20,17 @@
   <string name="add" translatable="false">Add</string>
   <string name="added" translatable="false">Added</string>
   <string name="add_audio" translatable="false">+Audio</string>
-  <string name="aichat_initializing_title" translatable="false">Initializing model</string>
-  <string name="aichat_initializing_content" translatable="false">Sit tight, this can take up to 1 minute</string>
-  <string name="app_intro" translatable="false">Explore a world of amazing on-device models from</string>
-  <string name="app_name" translatable="false">Google AI Edge Gallery</string>
-  <string name="app_name_first_part" translatable="false">Google AI</string>
-  <string name="app_name_second_part" translatable="false">Edge Gallery</string>
+  <string name="aichat_initializing_title" translatable="false">Đang khởi tạo model</string>
+  <string name="aichat_initializing_content" translatable="false">Vui lòng chờ, quá trình này có thể mất đến 1 phút</string>
+  <string name="app_intro" translatable="false">Khám phá thế giới AI on-device từ</string>
+  <string name="app_name" translatable="false">MISA AI Edge Device</string>
+  <string name="app_name_first_part" translatable="false">MISA AI</string>
+  <string name="app_name_second_part" translatable="false">Edge Device</string>
   <string name="askimage_emptystate_title" translatable="false">Ask Image</string>
   <string name="askimage_emptystate_content" translatable="false">To get started, tap the + below to add an image (max 10 images per chat) and type a prompt to ask a question about it!</string>
   <string name="askaudio_emptystate_title" translatable="false">Ask Audio</string>
   <string name="askaudio_emptystate_content" translatable="false">To get started, tap the + below to add a audio clip (limited to 1 clip up to 30 seconds) and type a prompt to transcribe or translate it!</string>
-  <string name="gallery_news_notification_title" translatable="false">Gallery News</string>
+  <string name="gallery_news_notification_title" translatable="false">Tin tức MISA AI Edge Device</string>
   <string name="baseline" translatable="false">Baseline</string>
   <string name="basic_info" translatable="false">Basic info</string>
   <string name="benchmark" translatable="false">Benchmark</string>
@@ -85,9 +85,9 @@
   <string name="download" translatable="false">Download</string>
   <string name="downloaded_size" translatable="false">%1$s downloaded</string>
   <string name="drawer_settings_label" translatable="false">Settings</string>
-  <string name="drawer_settings_description" translatable="false">Manage application settings</string>
+  <string name="drawer_settings_description" translatable="false">Quản lý cài đặt ứng dụng</string>
   <string name="drawer_models_label" translatable="false">Models</string>
-  <string name="drawer_models_description" translatable="false">Browse, try, and benchmark models</string>
+  <string name="drawer_models_description" translatable="false">Duyệt, thử nghiệm và đánh giá model</string>
   <string name="edit" translatable="false">Edit</string>
   <string name="edit_secret" translatable="false">Edit secret</string>
   <string name="enter_instruction" translatable="false">Enter instruction</string>
@@ -111,9 +111,9 @@
   <string name="logs_viewer_filter_text_input_placeholder" translatable="false">Filter logs</string>
   <string name="logs_viewer_title" translatable="false">Logs viewer</string>
   <string name="logs_viewer_no_matching_logs" translatable="false">No logs match the filter</string>
-  <string name="memory_warning_content" translatable="false">The model you\'ve selected may exceed your device\'s memory, which can cause the app to crash. For the best experience, we recommend trying a smaller model.</string>
-  <string name="memory_warning_proceed_anyway" translatable="false">Proceed anyway</string>
-  <string name="memory_warning_title" translatable="false">Memory Warning</string>
+  <string name="memory_warning_content" translatable="false">Model bạn chọn có thể vượt quá bộ nhớ của thiết bị, điều này có thể khiến ứng dụng bị lỗi. Để trải nghiệm tốt nhất, chúng tôi khuyên bạn nên thử model nhỏ hơn.</string>
+  <string name="memory_warning_proceed_anyway" translatable="false">Tiếp tục</string>
+  <string name="memory_warning_title" translatable="false">Cảnh báo bộ nhớ</string>
   <string name="max_tokens_warning_message" translatable="false">Setting max tokens above 10000 may cause app to be unstable.</string>
   <string name="model_is_initializing_msg" translatable="false">Initializing model…</string>
   <string name="model_list_imported_models_title" translatable="false">Imported models</string>
@@ -123,7 +123,7 @@
   </plurals>
   <string name="model_list_recommended_models_title" translatable="false">Recommended models</string>
   <string name="model_manager" translatable="false">Model Manager</string>
-  <string name="model_manager_select_task_title" translatable="false">Select a use case to try</string>
+  <string name="model_manager_select_task_title" translatable="false">Chọn tính năng để thử nghiệm</string>
   <string name="model_not_downloaded_msg" translatable="false">Model not downloaded yet</string>
   <string name="name" translatable="false">Name</string>
   <string name="no_cutouts_collected" translatable="false">No cutouts collected</string>
@@ -170,7 +170,7 @@
   <string name="test" translatable="false">Test</string>
   <string name="text_image_generation_text_field_placeholder" translatable="false">Type prompt…</string>
   <string name="text_input_placeholder_llm_chat" translatable="false">Type prompt…</string>
-  <string name="tos_dialog_title_app" translatable="false">Welcome to Google AI Edge Gallery</string>
+  <string name="tos_dialog_title_app" translatable="false">Chào mừng đến với MISA AI Edge Device</string>
   <string name="tos_dialog_title_gemma" translatable="false">Gemma Terms of Use</string>
   <string name="tos_dialog_accept_and_continue_button_label" translatable="false">Accept &amp; continue</string>
   <string name="tos_dialog_agree_and_continue_button_label" translatable="false">Agree &amp; continue</string>
@@ -224,7 +224,7 @@
 
   <!-- Strings for skills -->
   <string name="aichat_emptystate_title" translatable="false">AI Chat</string>
-  <string name="aichat_emptystate_content" translatable="false">Chat with on-device large language models.</string>
+  <string name="aichat_emptystate_content" translatable="false">Trò chuyện với AI trên thiết bị, hỗ trợ ảnh và âm thanh.</string>
   <string name="add_script" translatable="false">Add script</string>
   <string name="add_default_script" translatable="false">Add default script</string>
   <string name="add_skill" translatable="false">Add skill</string>
@@ -241,8 +241,8 @@
   <string name="add_skill_dialog_subtitle_from_local_import" translatable="false">Please first \"adb push\" the whole skill directory to /sdcard/Download</string>
   <string name="add_skill_manual_input_sheet_title" translatable="false">Create a skill</string>
   <string name="agent_skills" translatable="false">Agent Skills</string>
-  <string name="agent_skills_description" translatable="false">Use specialized, high-order reasoning by loading different skills or creating your own.\n\nTry tapping a sample prompt below to see Agent Skills in action!</string>
-  <string name="disclaimer_dialog_content" translatable="false">Third-party skills are not authored or endorsed by Google. Google is not responsible for their contents, security, or data handling practices.\n\nPlease exercise caution before providing sensitive information, such as personal identification, tokens, or API keys.\n\nAny use of an Agent Skill is subject to the applicable terms for that Skill.</string>
+  <string name="agent_skills_description" translatable="false">Sử dụng lập luận chuyên sâu bằng cách tải kỹ năng khác nhau hoặc tạo kỹ năng của riêng bạn.\n\nThử nhấn vào một mẫu câu hỏi bên dưới để xem Agent Skills hoạt động!</string>
+  <string name="disclaimer_dialog_content" translatable="false">Kỹ năng bên thứ ba không được MISA tạo ra hoặc chứng thực. MISA không chịu trách nhiệm về nội dung, bảo mật hoặc cách xử lý dữ liệu của chúng.\n\nVui lòng thận trọng trước khi cung cấp thông tin nhạy cảm như thông tin cá nhân, token hoặc API key.\n\nViệc sử dụng bất kỳ Agent Skill nào phải tuân theo các điều khoản áp dụng cho kỹ năng đó.</string>
   <string name="disclaimer_dialog_title" translatable="false">Add third-party skill</string>
   <string name="disclaimer_dialog_agree" translatable="false">Agree</string>
   <string name="delete_script_dialog_title" translatable="false">Delete script</string>
