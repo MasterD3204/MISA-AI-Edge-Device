@@ -51,6 +51,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -66,7 +67,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.google.ai.edge.gallery.data.Model
+import com.google.ai.edge.gallery.data.ModelDownloadStatusType
 import com.google.ai.edge.gallery.ui.llmchat.LlmChatModelHelper
+import com.google.ai.edge.gallery.ui.modelmanager.ModelManagerViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -91,6 +94,7 @@ enum class VoiceChatState {
 @Composable
 fun VoiceChatScreen(
     model: Model?,
+    modelManagerViewModel: ModelManagerViewModel,
     navigateUp: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -116,6 +120,18 @@ fun VoiceChatScreen(
             )
         }
         return
+    }
+
+    // ── Trigger initializeModel khi download thành công (giống ChatView.kt) ──
+    val uiState by modelManagerViewModel.uiState.collectAsState()
+    val task = remember(model) { modelManagerViewModel.getTaskById(id = "llm_voice_chat") }
+    val downloadStatus = uiState.modelDownloadStatus[model.name]
+    LaunchedEffect(downloadStatus, model.name) {
+        Log.d(TAG, "downloadStatus=${downloadStatus?.status} for model=${model.name}")
+        if (downloadStatus?.status == ModelDownloadStatusType.SUCCEEDED && task != null) {
+            Log.d(TAG, "Triggering initializeModel for ${model.name}")
+            modelManagerViewModel.initializeModel(context, task = task, model = model)
+        }
     }
 
     val messages  = remember { mutableStateListOf<VoiceMessage>() }

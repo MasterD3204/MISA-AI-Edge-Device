@@ -67,9 +67,31 @@ class PiperTtsEngine(
     // ── Init ──────────────────────────────────────────────────────────────
 
     fun init(): Boolean {
-        Log.i(TAG, "init() start — modelDir=$modelDir modelName=$modelName")
+        Log.i(TAG, "init() start — modelDir=$modelDir modelName=$modelName espDataDir=$espDataDir")
+
+        // Kiểm tra assets tồn tại
+        try {
+            val modelFiles = context.assets.list(modelDir)
+            Log.i(TAG, "Assets in '$modelDir': ${modelFiles?.joinToString() ?: "NONE / DIR NOT FOUND"}")
+        } catch (e: Exception) {
+            Log.e(TAG, "Cannot list assets dir '$modelDir'", e)
+        }
+        try {
+            val espFiles = context.assets.list(espDataDir)
+            Log.i(TAG, "Assets in '$espDataDir': count=${espFiles?.size ?: "NONE"}")
+        } catch (e: Exception) {
+            Log.e(TAG, "Cannot list assets dir '$espDataDir'", e)
+        }
+
         return try {
+            Log.i(TAG, "Loading native library sherpa-onnx-jni...")
+            System.loadLibrary("sherpa-onnx-jni")
+            Log.i(TAG, "Native library loaded successfully")
+
+            Log.i(TAG, "Copying espeak-ng-data from assets...")
             val externalDataDir = copyDataDir(espDataDir)
+            Log.i(TAG, "espeak-ng-data copied to: $externalDataDir")
+
             val config = OfflineTtsConfig(
                 model = OfflineTtsModelConfig(
                     vits = OfflineTtsVitsModelConfig(
@@ -79,20 +101,26 @@ class PiperTtsEngine(
                     ),
                     numThreads = numThreads,
                     provider   = "cpu",
-                    debug      = false,
+                    debug      = true,
                 )
             )
+            Log.i(TAG, "Creating OfflineTts...")
             tts = OfflineTts(assetManager = context.assets, config = config)
             val sr = tts!!.sampleRate()
-            if (sr <= 0) { Log.e(TAG, "Invalid sampleRate=$sr"); return false }
+            if (sr <= 0) {
+                Log.e(TAG, "Invalid sampleRate=$sr — model load failed")
+                return false
+            }
             Log.i(TAG, "OfflineTts ready — sampleRate=$sr")
             preProcessor = PiperTextPreProcessor(context)
             startWorker()
             true
         } catch (e: UnsatisfiedLinkError) {
-            Log.e(TAG, "Native lib not found", e); false
+            Log.e(TAG, "UnsatisfiedLinkError — libsherpa-onnx-jni.so not found or not loaded", e)
+            false
         } catch (e: Exception) {
-            Log.e(TAG, "init failed", e); false
+            Log.e(TAG, "init() failed with exception", e)
+            false
         }
     }
 

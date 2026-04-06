@@ -13,6 +13,7 @@ import com.google.ai.edge.gallery.data.Category
 import com.google.ai.edge.gallery.data.Model
 import com.google.ai.edge.gallery.data.Task
 import com.google.ai.edge.gallery.runtime.runtimeHelper
+import com.google.ai.edge.gallery.ui.modelmanager.ModelManagerViewModel
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -36,7 +37,6 @@ class VoiceChatTask @Inject constructor() : CustomTask {
       textInputPlaceHolderRes = android.R.string.ok,
     )
 
-  // Voice Chat chỉ cần text — không cần image/audio backend của LiteRT
   override fun initializeModelFn(
     context: Context,
     coroutineScope: CoroutineScope,
@@ -69,7 +69,8 @@ class VoiceChatTask @Inject constructor() : CustomTask {
     val model = uiState.selectedModel
 
     VoiceChatScreen(
-      model = model,  // nullable — VoiceChatScreen tự xử lý null
+      model = model,
+      modelManagerViewModel = myData.modelManagerViewModel,
       navigateUp = myData.onNavUp,
     )
   }
