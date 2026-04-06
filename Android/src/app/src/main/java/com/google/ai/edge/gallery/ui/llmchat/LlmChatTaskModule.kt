@@ -100,6 +100,8 @@ class LlmChatTask @Inject constructor() : CustomTask {
     LlmChatScreen(
       modelManagerViewModel = myData.modelManagerViewModel,
       navigateUp = myData.onNavUp,
+      showImagePicker = true,
+      showAudioPicker = true,
       emptyStateComposable = {
         Box(modifier = Modifier.fillMaxSize()) {
           Column(
