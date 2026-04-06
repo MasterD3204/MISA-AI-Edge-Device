@@ -102,7 +102,7 @@ private const val TEST_MODEL_ALLOW_LIST = """
         "accelerators": "gpu,cpu",
         "visionAccelerator": "gpu"
       },
-      "taskTypes": ["llm_chat", "llm_agent_chat"]
+      "taskTypes": ["llm_chat", "llm_agent_chat", "llm_voice_chat"]
     },
     {
       "name": "Gemma-4-E4B-it",
@@ -124,7 +124,7 @@ private const val TEST_MODEL_ALLOW_LIST = """
         "accelerators": "gpu,cpu",
         "visionAccelerator": "gpu"
       },
-      "taskTypes": ["llm_chat", "llm_agent_chat"]
+      "taskTypes": ["llm_chat", "llm_agent_chat", "llm_voice_chat"]
     }
   ]
 }
@@ -215,10 +215,11 @@ private val RESET_CONVERSATION_TURN_COUNT_CONFIG =
 
 private val PREDEFINED_LLM_TASK_ORDER =
   listOf(
-    BuiltInTaskId.LLM_ASK_IMAGE,
-    BuiltInTaskId.LLM_ASK_AUDIO,
     BuiltInTaskId.LLM_CHAT,
     BuiltInTaskId.LLM_AGENT_CHAT,
+    BuiltInTaskId.LLM_VOICE_CHAT,
+    BuiltInTaskId.LLM_ASK_IMAGE,
+    BuiltInTaskId.LLM_ASK_AUDIO,
     BuiltInTaskId.LLM_PROMPT_LAB,
     BuiltInTaskId.LLM_TINY_GARDEN,
     BuiltInTaskId.LLM_MOBILE_ACTIONS,
@@ -621,6 +622,7 @@ constructor(
         BuiltInTaskId.LLM_TINY_GARDEN,
         BuiltInTaskId.LLM_MOBILE_ACTIONS,
         BuiltInTaskId.LLM_AGENT_CHAT,
+        BuiltInTaskId.LLM_VOICE_CHAT,
       )
     for (task in getTasksByIds(ids = setOfTasks)) {
       // Remove duplicated imported model if existed.
@@ -1076,6 +1078,7 @@ constructor(
       tasks.get(key = BuiltInTaskId.LLM_CHAT)?.models?.add(model)
       tasks.get(key = BuiltInTaskId.LLM_PROMPT_LAB)?.models?.add(model)
       tasks.get(key = BuiltInTaskId.LLM_AGENT_CHAT)?.models?.add(model)
+      tasks.get(key = BuiltInTaskId.LLM_VOICE_CHAT)?.models?.add(model)
       if (model.llmSupportImage) {
         tasks.get(key = BuiltInTaskId.LLM_ASK_IMAGE)?.models?.add(model)
       }

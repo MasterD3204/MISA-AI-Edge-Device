@@ -33,6 +33,13 @@
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!-- Required for SpeechRecognizer on Android 11+ -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
+
     <!-- Additional permission required for push notification handling -->
     <!-- Required for resurfacing notifications after boot -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
