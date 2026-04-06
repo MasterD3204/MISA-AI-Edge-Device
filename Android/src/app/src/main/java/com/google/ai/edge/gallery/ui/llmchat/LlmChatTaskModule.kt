@@ -51,7 +51,18 @@ import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-// AI Chat.
+// AI Chat — unified chat with smart modality switching.
+//
+// Strategy:
+//  - Model is initialized with supportImage=true, supportAudio=true so all backends are ready.
+//  - showImagePicker=true and showAudioPicker=true expose the UI controls for image and audio.
+//  - When the user taps the reset button, the session resets with full multimodal support so
+//    the engine remains ready for any subsequent input type.
+//
+// The runtime (LlmChatModelHelper) adds Content.ImageBytes / Content.AudioBytes before text in
+// the sendMessageAsync payload, so the model always receives the correct multimodal context.
+// No manual modality switching is needed because the single conversation instance (initialised
+// with both visionBackend and audioBackend) can handle all three input types in the same session.
 
 class LlmChatTask @Inject constructor() : CustomTask {
   override val task: Task =
@@ -69,6 +80,7 @@ class LlmChatTask @Inject constructor() : CustomTask {
       textInputPlaceHolderRes = R.string.text_input_placeholder_llm_chat,
     )
 
+  // Initialise with all backends enabled so one conversation handles text + image + audio.
   override fun initializeModelFn(
     context: Context,
     coroutineScope: CoroutineScope,
@@ -100,13 +112,19 @@ class LlmChatTask @Inject constructor() : CustomTask {
     LlmChatScreen(
       modelManagerViewModel = myData.modelManagerViewModel,
       navigateUp = myData.onNavUp,
+      // Expose image and audio pickers in the input UI.
       showImagePicker = true,
       showAudioPicker = true,
+      // onResetSessionClickedOverride = null (default): ChatViewWrapper will call
+      // viewModel.resetSession(supportImage = showImagePicker, supportAudio = showAudioPicker)
+      // which means supportImage=true, supportAudio=true — keeps full multimodal support.
       emptyStateComposable = {
         Box(modifier = Modifier.fillMaxSize()) {
           Column(
             modifier =
-              Modifier.align(Alignment.Center).padding(horizontal = 48.dp).padding(bottom = 48.dp),
+              Modifier.align(Alignment.Center)
+                .padding(horizontal = 48.dp)
+                .padding(bottom = 48.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp),
           ) {
@@ -125,7 +143,7 @@ class LlmChatTask @Inject constructor() : CustomTask {
 }
 
 @Module
-@InstallIn(SingletonComponent::class) // Or another component that fits your scope
+@InstallIn(SingletonComponent::class)
 internal object LlmChatTaskModule {
   @Provides
   @IntoSet
@@ -138,7 +156,7 @@ internal object LlmChatTaskModule {
 // Ask image - Removed: image support is now integrated into AI Chat.
 
 @Module
-@InstallIn(SingletonComponent::class) // Or another component that fits your scope
+@InstallIn(SingletonComponent::class)
 internal object LlmAskImageModule {
   // LlmAskImageTask removed - image support merged into AI Chat
 }
@@ -147,7 +165,7 @@ internal object LlmAskImageModule {
 // Ask audio - Removed: audio support is now integrated into AI Chat.
 
 @Module
-@InstallIn(SingletonComponent::class) // Or another component that fits your scope
+@InstallIn(SingletonComponent::class)
 internal object LlmAskAudioModule {
   // LlmAskAudioTask removed - audio support merged into AI Chat
 }
