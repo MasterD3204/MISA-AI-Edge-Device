@@ -886,6 +886,7 @@ private fun TaskList(
   }
 
   // Non-gm4: giữ nguyên HorizontalPager cũ
+  HorizontalPager(
     state = pagerState,
     verticalAlignment = Alignment.Top,
     contentPadding = PaddingValues(horizontal = 20.dp),
