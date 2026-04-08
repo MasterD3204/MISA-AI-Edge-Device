@@ -1,9 +1,7 @@
 ---
 name: google-search
-description: Search the web using Google Custom Search API and return top results.
+description: Search the web using Google Search and return top results.
 metadata:
-  require-secret: true
-  require-secret-description: "Enter your Google Custom Search API credentials as JSON: {\"api_key\": \"YOUR_API_KEY\", \"cx\": \"YOUR_SEARCH_ENGINE_ID\"}"
   homepage: https://developers.google.com/custom-search/v1/overview
 ---
 

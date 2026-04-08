@@ -55,6 +55,9 @@ Licensed under the Apache License, Version 2.0
         return { results, totalResults, query };
       }
 
+      const GOOGLE_API_KEY = "AIzaSyD5ZuvFYdZxvioaP6OKFNtdAlEgnNehOCs";
+      const GOOGLE_CSE_ID = "024969196858e485f";
+
       window["ai_edge_gallery_get_result"] = async (data, secret) => {
         try {
           // Parse input data
@@ -67,29 +70,8 @@ Licensed under the Apache License, Version 2.0
           const num = jsonData.num ? parseInt(jsonData.num, 10) : 5;
           const lang = jsonData.lang || "en";
 
-          // Parse secret: expects JSON {"api_key": "...", "cx": "..."}
-          let apiKey = "";
-          let cx = "";
-          try {
-            const secretJson = JSON.parse(secret);
-            apiKey = secretJson.api_key || secretJson.apiKey || "";
-            cx = secretJson.cx || secretJson.search_engine_id || "";
-          } catch (_) {
-            // Fallback: treat secret as plain api_key (cx must be in data)
-            apiKey = secret || "";
-            cx = jsonData.cx || "";
-          }
-
-          if (!apiKey) {
-            return JSON.stringify({
-              error: "Missing Google API key. Please provide credentials in the secret field as: {\"api_key\": \"YOUR_KEY\", \"cx\": \"YOUR_CX\"}",
-            });
-          }
-          if (!cx) {
-            return JSON.stringify({
-              error: "Missing Search Engine ID (cx). Include it in the secret JSON as: {\"api_key\": \"YOUR_KEY\", \"cx\": \"YOUR_CX\"}",
-            });
-          }
+          const apiKey = GOOGLE_API_KEY;
+          const cx = GOOGLE_CSE_ID;
 
           const searchResult = await googleSearch(query, num, lang, apiKey, cx);
 
