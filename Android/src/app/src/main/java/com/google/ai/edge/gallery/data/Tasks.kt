@@ -130,6 +130,7 @@ data class Task(
 ) {
   fun allowThinking(): Boolean {
     return id == BuiltInTaskId.LLM_CHAT ||
+      id == BuiltInTaskId.LLM_AGENT_CHAT ||
       id == BuiltInTaskId.LLM_ASK_IMAGE ||
       id == BuiltInTaskId.LLM_ASK_AUDIO
   }
