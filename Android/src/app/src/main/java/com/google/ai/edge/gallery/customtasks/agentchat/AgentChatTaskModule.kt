@@ -66,7 +66,9 @@ class AgentChatTask @Inject constructor() : CustomTask {
 
         2. If a relevant skill exists, use the `load_skill` tool to read its instructions. You MUST NOT use `run_intent` under any circumstances at this step.
 
-        3. Follow the skill's instructions exactly to complete the task. You MUST NOT output any intermediate thoughts or status updates. No exceptions! Output ONLY the final result when successful. It should contain one-sentence summary of the action taken, and the final result of the skill.
+        3. Follow the skill's instructions exactly to complete the task. You MUST NOT output any intermediate thoughts or status updates. No exceptions!
+
+        CRITICAL FOR STEP 3: If the skill says to use `run_js`, you MUST call `run_js` — do NOT call `run_intent` instead. Do NOT say you cannot access the internet or real-time data — `run_js` fetches live data for you automatically. After `run_js` returns the result, use that result to answer the user. Output ONLY the final answer when successful. It should contain one-sentence summary of the action taken, and the final result of the skill.
         """
           .trimIndent(),
     )

@@ -14,24 +14,27 @@ Search the web and retrieve full content from the top result pages. Use the actu
 ## Examples
 
 * "Search Google for the latest news about AI"
-* "Google search: best Vietnamese restaurants in Hanoi"
+* "Giá vàng hôm nay"
+* "Tỷ giá USD hôm nay"
+* "Thời tiết Hà Nội hôm nay"
 * "Find information about climate change"
-* "Search for: how to learn Kotlin"
 
 ## Instructions
 
-Call the `run_js` tool with the following exact parameters:
+**CRITICAL: You MUST use the `run_js` tool. Do NOT use `run_intent`. Do NOT use any other tool.**
 
+Step 1: Call the `run_js` tool with EXACTLY these parameters:
+- skill name: `google-search`
 - script name: `index.html`
-- data: A JSON string with the following fields:
-  - query: Required. The search query string extracted from the user's request.
-  - num: Optional. Number of pages to fetch (1–5, default: 5).
-  - lang: Optional. Language code (e.g., "vi", "en"). Default: "en".
+- data: a JSON string with field `query` containing the search query
 
-**After receiving results:**
-- The tool returns full text content from each web page under `[Source N]`.
-- Read the content carefully and answer the user's question using **specific information from the page content**.
-- Do NOT just summarize — extract exact facts, data, names, dates, numbers from the content.
-- Cite which source (Source 1, 2, etc.) each piece of information comes from.
-- Respond in the same language as the user's original message.
-- If page content was not available (only snippet), note that and use the snippet.
+Example call:
+- skill name: google-search
+- script name: index.html
+- data: {"query": "giá vàng hôm nay", "num": 5, "lang": "vi"}
+
+Step 2: Wait for the tool to return. The result contains full web page content from top sources.
+
+Step 3: Read the content from each `[Source N]` section carefully. Use the **actual text from the pages** to answer. Extract specific facts, numbers, dates directly from the content. Do NOT say you cannot access the internet — the tool already fetched the data for you.
+
+Step 4: Cite sources. Respond in the same language as the user.
