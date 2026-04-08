@@ -1,0 +1,133 @@
+<!--
+Copyright 2025 MISA AI Edge Device
+Licensed under the Apache License, Version 2.0
+-->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Google Search</title>
+  </head>
+  <body>
+    <script>
+      /**
+       * Performs a Google Custom Search using the provided API key and Search Engine ID.
+       * @param {string} query - The search query.
+       * @param {number} num - Number of results (1–10).
+       * @param {string} lang - Language code for results.
+       * @param {string} apiKey - Google Custom Search API key.
+       * @param {string} cx - Custom Search Engine ID.
+       */
+      async function googleSearch(query, num, lang, apiKey, cx) {
+        const params = new URLSearchParams({
+          key: apiKey,
+          cx: cx,
+          q: query,
+          num: String(Math.min(Math.max(num, 1), 10)),
+        });
+        if (lang && lang !== "en") {
+          params.set("lr", `lang_${lang}`);
+          params.set("hl", lang);
+        }
+
+        const url = `https://www.googleapis.com/customsearch/v1?${params.toString()}`;
+        const res = await fetch(url);
+        if (!res.ok) {
+          const errBody = await res.text();
+          throw new Error(`Google API error ${res.status}: ${errBody}`);
+        }
+        const data = await res.json();
+
+        if (!data.items || data.items.length === 0) {
+          return { results: [], totalResults: "0", query: query };
+        }
+
+        const results = data.items.map((item, idx) => ({
+          index: idx + 1,
+          title: item.title || "",
+          url: item.link || "",
+          snippet: item.snippet ? item.snippet.replace(/\n/g, " ").trim() : "",
+          displayLink: item.displayLink || "",
+        }));
+
+        const totalResults = data.searchInformation?.totalResults || "0";
+        return { results, totalResults, query };
+      }
+
+      window["ai_edge_gallery_get_result"] = async (data, secret) => {
+        try {
+          // Parse input data
+          const jsonData = JSON.parse(data);
+          if (!jsonData.query || jsonData.query.trim() === "") {
+            return JSON.stringify({ error: "No search query provided." });
+          }
+
+          const query = jsonData.query.trim();
+          const num = jsonData.num ? parseInt(jsonData.num, 10) : 5;
+          const lang = jsonData.lang || "en";
+
+          // Parse secret: expects JSON {"api_key": "...", "cx": "..."}
+          let apiKey = "";
+          let cx = "";
+          try {
+            const secretJson = JSON.parse(secret);
+            apiKey = secretJson.api_key || secretJson.apiKey || "";
+            cx = secretJson.cx || secretJson.search_engine_id || "";
+          } catch (_) {
+            // Fallback: treat secret as plain api_key (cx must be in data)
+            apiKey = secret || "";
+            cx = jsonData.cx || "";
+          }
+
+          if (!apiKey) {
+            return JSON.stringify({
+              error: "Missing Google API key. Please provide credentials in the secret field as: {\"api_key\": \"YOUR_KEY\", \"cx\": \"YOUR_CX\"}",
+            });
+          }
+          if (!cx) {
+            return JSON.stringify({
+              error: "Missing Search Engine ID (cx). Include it in the secret JSON as: {\"api_key\": \"YOUR_KEY\", \"cx\": \"YOUR_CX\"}",
+            });
+          }
+
+          const searchResult = await googleSearch(query, num, lang, apiKey, cx);
+
+          if (searchResult.results.length === 0) {
+            return JSON.stringify({
+              query: searchResult.query,
+              totalResults: "0",
+              results: [],
+              message: `No results found for "${query}". Try a different query.`,
+            });
+          }
+
+          // Format output compactly to save context window
+          let output = `Google Search: "${query}" — ${searchResult.totalResults} total results\n\n`;
+          for (const r of searchResult.results) {
+            output += `${r.index}. ${r.title}\n`;
+            output += `   ${r.url}\n`;
+            if (r.snippet) output += `   ${r.snippet}\n`;
+            output += "\n";
+          }
+
+          // Truncate if too long
+          const MAX_CHARS = 4000;
+          if (output.length > MAX_CHARS) {
+            output = output.substring(0, MAX_CHARS) + "\n... [TRUNCATED]";
+          }
+
+          return JSON.stringify({
+            query: searchResult.query,
+            totalResults: searchResult.totalResults,
+            results: searchResult.results,
+            formatted: output,
+          });
+        } catch (e) {
+          console.error("Google Search error:", e);
+          return JSON.stringify({ error: `Google Search failed: ${e.message}` });
+        }
+      };
+    </script>
+  </body>
+</html>
