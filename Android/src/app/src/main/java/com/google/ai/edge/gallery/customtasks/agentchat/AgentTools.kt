@@ -174,30 +174,45 @@ class AgentTools() : ToolSet {
         CallJsAgentAction(url = url, data = data.trim().ifEmpty { "{}" }, secret = secret)
       _actionChannel.send(action)
       val result = action.result.await()
+      Log.d(TAG, "run_js raw result (first 500 chars): ${result.take(500)}")
 
       // Try to parse result to CallJsSkillResult.
       val moshi: Moshi = Moshi.Builder().build()
       val jsonAdapter: JsonAdapter<CallJsSkillResult> =
         moshi.adapter(CallJsSkillResult::class.java).failOnUnknown()
-      val resultJson = runCatching { jsonAdapter.fromJson(result) }.getOrNull()
-      val error = resultJson?.error
+      val parseException = runCatching { jsonAdapter.fromJson(result) }
+      val resultJson = parseException.getOrNull()
+      if (parseException.isFailure) {
+        Log.w(TAG, "run_js: failed to parse as CallJsSkillResult (failOnUnknown), retrying lenient...")
+      }
+      // Retry with lenient adapter (ignore unknown fields like query/totalResults)
+      val resultJsonLenient = if (resultJson == null) {
+        runCatching {
+          moshi.adapter(CallJsSkillResult::class.java).fromJson(result)
+        }.getOrNull()
+      } else resultJson
+      val finalResultJson = resultJsonLenient
+      val error = finalResultJson?.error
+      Log.d(TAG, "run_js parsed: resultJson=${finalResultJson?.result?.take(200)} error=$error")
 
       // Failed to parse. Treat its whole as a result string.
       if (
-        resultJson == null ||
-          (resultJson.result == null && resultJson.webview == null && resultJson.image == null)
+        finalResultJson == null ||
+          (finalResultJson.result == null && finalResultJson.webview == null && finalResultJson.image == null)
       ) {
+        Log.w(TAG, "run_js: resultJson null or all fields null — returning raw string to LLM (len=${result.length})")
         mapOf("result" to result, "status" to "succeeded")
       }
       // Error case.
       else if (error != null) {
+        Log.e(TAG, "run_js: skill returned error: $error")
         mapOf("error" to error, "status" to "failed")
       }
       // Non-error cases.
       else {
         // Handle image and webview in result.
-        val image = resultJson.image
-        val webview = resultJson.webview
+        val image = finalResultJson.image
+        val webview = finalResultJson.webview
         if (image != null) {
           Log.d(TAG, "Got an image response.")
           resultImageToShow = image
@@ -212,8 +227,8 @@ class AgentTools() : ToolSet {
           Log.d(TAG, "Webview url: $webviewUrl")
           resultWebviewToShow = webview.copy(url = webviewUrl)
         }
-        Log.d(TAG, "Result: ${resultJson.result}")
-        mapOf("result" to (resultJson.result ?: ""), "status" to "succeeded")
+        Log.d(TAG, "run_js result to LLM (first 300): ${finalResultJson.result?.take(300)}")
+        mapOf("result" to (finalResultJson.result ?: ""), "status" to "succeeded")
       }
     }
   }

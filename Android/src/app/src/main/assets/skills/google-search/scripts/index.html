@@ -77,10 +77,7 @@ Licensed under the Apache License, Version 2.0
 
           if (searchResult.results.length === 0) {
             return JSON.stringify({
-              query: searchResult.query,
-              totalResults: "0",
-              results: [],
-              message: `No results found for "${query}". Try a different query.`,
+              result: `No results found for "${query}". Try a different query.`,
             });
           }
 
@@ -99,12 +96,8 @@ Licensed under the Apache License, Version 2.0
             output = output.substring(0, MAX_CHARS) + "\n... [TRUNCATED]";
           }
 
-          return JSON.stringify({
-            query: searchResult.query,
-            totalResults: searchResult.totalResults,
-            results: searchResult.results,
-            formatted: output,
-          });
+          // Return "result" field so CallJsSkillResult parses correctly
+          return JSON.stringify({ result: output });
         } catch (e) {
           console.error("Google Search error:", e);
           return JSON.stringify({ error: `Google Search failed: ${e.message}` });
