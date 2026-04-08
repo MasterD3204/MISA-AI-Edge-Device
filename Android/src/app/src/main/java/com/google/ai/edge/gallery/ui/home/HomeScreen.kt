@@ -849,41 +849,43 @@ private fun TaskList(
     initialAnimationDone = true
   }
 
-  // The highlighted tiles at the top.
+  // Khi gm4=true: hiển thị 3 tính năng thẳng hàng, chỉ 1 lần duy nhất
   if (gm4) {
+    val voiceChatTask = modelManagerViewModel.getTaskById(BuiltInTaskId.LLM_VOICE_CHAT)
+    val taskToDescription = buildMap {
+      put(BuiltInTaskId.LLM_CHAT, "Trò chuyện với model Gemma 4 mới nhất, hỗ trợ ảnh và âm thanh")
+      put(BuiltInTaskId.LLM_AGENT_CHAT, "Để Gemma 4 hoàn thành các tác vụ nâng cao cho\u00A0bạn")
+      if (voiceChatTask != null) put(BuiltInTaskId.LLM_VOICE_CHAT, "Trò chuyện bằng giọng nói với AI on-device")
+    }
+    val featuredTasks = buildList {
+      add(modelManagerViewModel.getTaskById(BuiltInTaskId.LLM_CHAT)!!)
+      add(modelManagerViewModel.getTaskById(BuiltInTaskId.LLM_AGENT_CHAT)!!)
+      if (voiceChatTask != null) add(voiceChatTask)
+    }
     Column(
       verticalArrangement = Arrangement.spacedBy(10.dp),
-      modifier =
-        Modifier.padding(horizontal = 24.dp).graphicsLayer {
+      modifier = Modifier
+        .padding(horizontal = 24.dp)
+        .graphicsLayer {
           alpha = progress
           translationY = (CONTENT_COMPOSABLES_OFFSET_Y.dp * (1 - progress)).toPx()
         },
     ) {
-      val chatToDescription =
-        mapOf(
-          BuiltInTaskId.LLM_CHAT to "Trò chuyện với model Gemma 4 mới nhất, hỗ trợ ảnh và âm thanh",
-          // use "\u00a0" to make sure the word before and after it should always be together when
-          // wrapping lines.
-          BuiltInTaskId.LLM_AGENT_CHAT to "Để Gemma 4 hoàn thành các tác vụ nâng cao cho\u00A0bạn",
-        )
-      for (task in
-        listOf(
-          modelManagerViewModel.getTaskById(BuiltInTaskId.LLM_CHAT)!!,
-          modelManagerViewModel.getTaskById(BuiltInTaskId.LLM_AGENT_CHAT)!!,
-        )) {
+      for ((idx, task) in featuredTasks.withIndex()) {
         TaskCard(
           task = task,
-          index = 0,
+          index = idx,
           animate = !initialAnimationDone && enableAnimation,
           onClick = { navigateToTaskScreen(task) },
           modifier = Modifier.fillMaxWidth(),
-          description = chatToDescription[task.id]!!,
+          description = taskToDescription[task.id] ?: "",
         )
       }
     }
+    return
   }
 
-  HorizontalPager(
+  // Non-gm4: giữ nguyên HorizontalPager cũ
     state = pagerState,
     verticalAlignment = Alignment.Top,
     contentPadding = PaddingValues(horizontal = 20.dp),
