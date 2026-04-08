@@ -11,14 +11,10 @@ Licensed under the Apache License, Version 2.0
   </head>
   <body>
     <script>
-      /**
-       * Performs a Google Custom Search using the provided API key and Search Engine ID.
-       * @param {string} query - The search query.
-       * @param {number} num - Number of results (1–10).
-       * @param {string} lang - Language code for results.
-       * @param {string} apiKey - Google Custom Search API key.
-       * @param {string} cx - Custom Search Engine ID.
-       */
+      const GOOGLE_API_KEY = "AIzaSyD5ZuvFYdZxvioaP6OKFNtdAlEgnNehOCs";
+      const GOOGLE_CSE_ID = "024969196858e485f";
+
+      // Fetch top search results from Google Custom Search
       async function googleSearch(query, num, lang, apiKey, cx) {
         const params = new URLSearchParams({
           key: apiKey,
@@ -30,37 +26,81 @@ Licensed under the Apache License, Version 2.0
           params.set("lr", `lang_${lang}`);
           params.set("hl", lang);
         }
-
-        const url = `https://www.googleapis.com/customsearch/v1?${params.toString()}`;
-        const res = await fetch(url);
+        const res = await fetch(`https://www.googleapis.com/customsearch/v1?${params.toString()}`);
         if (!res.ok) {
           const errBody = await res.text();
           throw new Error(`Google API error ${res.status}: ${errBody}`);
         }
         const data = await res.json();
-
-        if (!data.items || data.items.length === 0) {
-          return { results: [], totalResults: "0", query: query };
-        }
-
-        const results = data.items.map((item, idx) => ({
-          index: idx + 1,
+        if (!data.items || data.items.length === 0) return [];
+        return data.items.map((item) => ({
           title: item.title || "",
           url: item.link || "",
           snippet: item.snippet ? item.snippet.replace(/\n/g, " ").trim() : "",
-          displayLink: item.displayLink || "",
         }));
-
-        const totalResults = data.searchInformation?.totalResults || "0";
-        return { results, totalResults, query };
       }
 
-      const GOOGLE_API_KEY = "AIzaSyD5ZuvFYdZxvioaP6OKFNtdAlEgnNehOCs";
-      const GOOGLE_CSE_ID = "024969196858e485f";
+      // Fetch and extract readable text from a URL via allorigins proxy
+      async function fetchPageContent(url, maxChars) {
+        try {
+          // Use allorigins to bypass CORS
+          const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+          const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(8000) });
+          if (!res.ok) return null;
+          const data = await res.json();
+          const html = data.contents;
+          if (!html) return null;
+
+          // Parse HTML and extract text
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(html, "text/html");
+
+          // Remove unwanted elements
+          const removeSelectors = [
+            "script", "style", "nav", "header", "footer",
+            "aside", "iframe", "noscript", "ads", ".ads",
+            "#ads", ".cookie", ".popup", ".banner", ".sidebar",
+            ".menu", ".navigation", ".social", ".share",
+          ];
+          removeSelectors.forEach((sel) => {
+            doc.querySelectorAll(sel).forEach((el) => el.remove());
+          });
+
+          // Try to get main content first
+          const mainSelectors = ["article", "main", ".content", "#content", ".post", ".article", ".entry"];
+          let textContent = "";
+          for (const sel of mainSelectors) {
+            const el = doc.querySelector(sel);
+            if (el) {
+              textContent = el.innerText || el.textContent || "";
+              if (textContent.trim().length > 200) break;
+            }
+          }
+
+          // Fallback to body
+          if (textContent.trim().length < 200) {
+            textContent = doc.body ? (doc.body.innerText || doc.body.textContent || "") : "";
+          }
+
+          // Clean up whitespace
+          textContent = textContent
+            .replace(/\t/g, " ")
+            .replace(/[ ]{2,}/g, " ")
+            .replace(/\n{3,}/g, "\n\n")
+            .trim();
+
+          if (textContent.length > maxChars) {
+            textContent = textContent.substring(0, maxChars) + "... [TRUNCATED]";
+          }
+
+          return textContent.length > 100 ? textContent : null;
+        } catch (e) {
+          return null;
+        }
+      }
 
       window["ai_edge_gallery_get_result"] = async (data, secret) => {
         try {
-          // Parse input data
           const jsonData = JSON.parse(data);
           if (!jsonData.query || jsonData.query.trim() === "") {
             return JSON.stringify({ error: "No search query provided." });
@@ -69,34 +109,44 @@ Licensed under the Apache License, Version 2.0
           const query = jsonData.query.trim();
           const num = jsonData.num ? parseInt(jsonData.num, 10) : 5;
           const lang = jsonData.lang || "en";
+          const maxCharsPerPage = 2000;
 
-          const apiKey = GOOGLE_API_KEY;
-          const cx = GOOGLE_CSE_ID;
+          // Step 1: Get search results
+          const searchResults = await googleSearch(query, num, lang, GOOGLE_API_KEY, GOOGLE_CSE_ID);
 
-          const searchResult = await googleSearch(query, num, lang, apiKey, cx);
-
-          if (searchResult.results.length === 0) {
-            return JSON.stringify({
-              result: `No results found for "${query}". Try a different query.`,
-            });
+          if (searchResults.length === 0) {
+            return JSON.stringify({ result: `No results found for "${query}". Try a different query.` });
           }
 
-          // Format output compactly to save context window
-          let output = `Google Search: "${query}" — ${searchResult.totalResults} total results\n\n`;
-          for (const r of searchResult.results) {
-            output += `${r.index}. ${r.title}\n`;
-            output += `   ${r.url}\n`;
-            if (r.snippet) output += `   ${r.snippet}\n`;
-            output += "\n";
+          // Step 2: Fetch content from each page in parallel
+          const contentPromises = searchResults.map((r) => fetchPageContent(r.url, maxCharsPerPage));
+          const pageContents = await Promise.all(contentPromises);
+
+          // Step 3: Build output for LLM
+          let output = `Web search results for: "${query}"\n`;
+          output += `Found ${searchResults.length} sources. Full page content below:\n\n`;
+          output += "=".repeat(60) + "\n\n";
+
+          for (let i = 0; i < searchResults.length; i++) {
+            const r = searchResults[i];
+            const content = pageContents[i];
+            output += `[Source ${i + 1}] ${r.title}\n`;
+            output += `URL: ${r.url}\n`;
+            if (content) {
+              output += `\nCONTENT:\n${content}\n`;
+            } else {
+              // Fallback to snippet if page fetch failed
+              output += `\nSNIPPET (page could not be fetched): ${r.snippet}\n`;
+            }
+            output += "\n" + "-".repeat(60) + "\n\n";
           }
 
-          // Truncate if too long
-          const MAX_CHARS = 4000;
-          if (output.length > MAX_CHARS) {
-            output = output.substring(0, MAX_CHARS) + "\n... [TRUNCATED]";
+          // Total limit to avoid overflowing context window
+          const TOTAL_MAX = 12000;
+          if (output.length > TOTAL_MAX) {
+            output = output.substring(0, TOTAL_MAX) + "\n\n... [TRUNCATED — context limit reached]";
           }
 
-          // Return "result" field so CallJsSkillResult parses correctly
           return JSON.stringify({ result: output });
         } catch (e) {
           console.error("Google Search error:", e);
