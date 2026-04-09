@@ -25,7 +25,6 @@ plugins {
   alias(libs.plugins.hilt.application)
   alias(libs.plugins.oss.licenses)
   alias(libs.plugins.ksp)
-  alias(libs.plugins.jetbrains.kotlin.android)
   kotlin("kapt")
 }
 
@@ -82,7 +81,7 @@ android {
       }
       jniLibs {
           useLegacyPackaging = true
-          pickFirsts += setOf(
+          pickFirsts += listOf(
               "lib/x86/libonnxruntime.so",
               "lib/x86_64/libonnxruntime.so",
               "lib/armeabi-v7a/libonnxruntime.so",
