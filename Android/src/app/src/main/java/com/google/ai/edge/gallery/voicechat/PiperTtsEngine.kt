@@ -60,31 +60,88 @@ class PiperTtsEngine(
         Log.i(TAG, "  espDataDir = $espDataDir")
         Log.i(TAG, "═══════════════════════════════════════")
 
-        // Kiểm tra assets tồn tại
+        // BƯỚC 0: Kiểm tra assets tồn tại
+        Log.i(TAG, "--- BƯỚC 0: Kiểm tra assets ---")
+        try {
+            val rootList = context.assets.list("")
+            Log.i(TAG, "Assets root: ${rootList?.take(20)?.joinToString()}")
+        } catch (t: Throwable) {
+            Log.e(TAG, "Không list được assets root", t)
+        }
         try {
             val modelFiles = context.assets.list(modelDir)
-            Log.i(TAG, "Assets in '$modelDir': ${modelFiles?.joinToString() ?: "NONE / DIR NOT FOUND"}")
-        } catch (e: Exception) {
-            Log.e(TAG, "Cannot list assets dir '$modelDir'", e)
+            Log.i(TAG, "Assets '$modelDir': ${modelFiles?.joinToString() ?: "KHÔNG TÌM THẤY THƯ MỤC"}")
+            if (modelFiles.isNullOrEmpty()) {
+                Log.e(TAG, "❌ Thư mục assets '$modelDir' không tồn tại hoặc rỗng!")
+                return false
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "❌ Lỗi khi list assets '$modelDir'", t)
+            return false
         }
         try {
             val espFiles = context.assets.list(espDataDir)
-            Log.i(TAG, "Assets in '$espDataDir': count=${espFiles?.size ?: "NONE"}")
-        } catch (e: Exception) {
-            Log.e(TAG, "Cannot list assets dir '$espDataDir'", e)
+            Log.i(TAG, "Assets '$espDataDir': count=${espFiles?.size ?: "KHÔNG TÌM THẤY"}")
+            if (espFiles.isNullOrEmpty()) {
+                Log.e(TAG, "❌ Thư mục espeak-ng-data '$espDataDir' không tồn tại!")
+                return false
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "❌ Lỗi khi list assets '$espDataDir'", t)
+            return false
         }
 
-        return try {
-            // BƯỚC 1: Load native library
-            Log.i(TAG, "⚡ Loading native library sherpa-onnx-jni...")
+        // BƯỚC 1: Kiểm tra .so file trên thiết bị
+        Log.i(TAG, "--- BƯỚC 1: Kiểm tra native library ---")
+        try {
+            val nativeLibDir = context.applicationInfo.nativeLibraryDir
+            Log.i(TAG, "nativeLibraryDir = $nativeLibDir")
+            val libDir = java.io.File(nativeLibDir)
+            val soFiles = libDir.listFiles()?.map { it.name } ?: emptyList()
+            Log.i(TAG, "Danh sách .so trong nativeLibraryDir: ${soFiles.joinToString()}")
+            val hasSherpa = soFiles.any { it.contains("sherpa") }
+            Log.i(TAG, "Có libsherpa-onnx-jni.so: $hasSherpa")
+            if (!hasSherpa) {
+                Log.e(TAG, "❌ libsherpa-onnx-jni.so KHÔNG có trong nativeLibraryDir!")
+                Log.e(TAG, "   => Kiểm tra jniLibs/ đã được build vào APK chưa")
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Lỗi khi kiểm tra nativeLibraryDir", t)
+        }
+
+        // BƯỚC 2: Load native library
+        Log.i(TAG, "--- BƯỚC 2: System.loadLibrary ---")
+        try {
             System.loadLibrary("sherpa-onnx-jni")
-            Log.i(TAG, "✅ Native library loaded")
+            Log.i(TAG, "✅ loadLibrary('sherpa-onnx-jni') thành công")
+        } catch (e: UnsatisfiedLinkError) {
+            Log.e(TAG, "❌ UnsatisfiedLinkError khi load sherpa-onnx-jni", e)
+            Log.e(TAG, "   message: ${e.message}")
+            return false
+        } catch (t: Throwable) {
+            Log.e(TAG, "❌ Throwable khi load sherpa-onnx-jni", t)
+            return false
+        }
 
-            // BƯỚC 2: Copy espeak-ng-data từ assets ra external storage
-            val externalDataDir = copyDataDir(espDataDir)
-            Log.i(TAG, "espeak-ng-data copied to: $externalDataDir")
+        // BƯỚC 3: Copy espeak-ng-data
+        Log.i(TAG, "--- BƯỚC 3: Copy espeak-ng-data ---")
+        val externalDataDir: String
+        try {
+            externalDataDir = copyDataDir(espDataDir)
+            Log.i(TAG, "✅ espeak-ng-data path: $externalDataDir")
+            val dir = java.io.File(externalDataDir)
+            Log.i(TAG, "   Tồn tại: ${dir.exists()}, isDir: ${dir.isDirectory}")
+            val count = dir.listFiles()?.size ?: 0
+            Log.i(TAG, "   Số file/folder trong espeak-ng-data: $count")
+        } catch (t: Throwable) {
+            Log.e(TAG, "❌ Lỗi khi copy espeak-ng-data", t)
+            return false
+        }
 
-            // BƯỚC 3: Build config
+        // BƯỚC 4: Build config
+        Log.i(TAG, "--- BƯỚC 4: Build OfflineTtsConfig ---")
+        val config: OfflineTtsConfig
+        try {
             val vitsConfig = OfflineTtsVitsModelConfig(
                 model   = "$modelDir/$modelName",
                 tokens  = "$modelDir/$tokensName",
@@ -96,37 +153,62 @@ class PiperTtsEngine(
                 provider   = "cpu",
                 debug      = true,
             )
-            val config = OfflineTtsConfig(model = modelConfig)
+            config = OfflineTtsConfig(model = modelConfig)
+            Log.i(TAG, "✅ Config built:")
+            Log.i(TAG, "   vits.model   = ${vitsConfig.model}")
+            Log.i(TAG, "   vits.tokens  = ${vitsConfig.tokens}")
+            Log.i(TAG, "   vits.dataDir = ${vitsConfig.dataDir}")
+            Log.i(TAG, "   numThreads   = $numThreads")
+        } catch (t: Throwable) {
+            Log.e(TAG, "❌ Lỗi khi build config", t)
+            return false
+        }
 
-            Log.i(TAG, "⚡ Config:")
-            Log.i(TAG, "   model   = ${vitsConfig.model}")
-            Log.i(TAG, "   tokens  = ${vitsConfig.tokens}")
-            Log.i(TAG, "   dataDir = ${vitsConfig.dataDir}")
-
-            // BƯỚC 4: Tạo OfflineTts với assetManager
-            Log.i(TAG, "⚡ Đang gọi OfflineTts(assetManager=...)...")
+        // BƯỚC 5: Tạo OfflineTts
+        Log.i(TAG, "--- BƯỚC 5: Tạo OfflineTts ---")
+        try {
+            Log.i(TAG, "⚡ Gọi OfflineTts(assetManager=context.assets, config=...)...")
             tts = OfflineTts(assetManager = context.assets, config = config)
-            Log.i(TAG, "✅ OfflineTts tạo thành công!")
+            Log.i(TAG, "✅ OfflineTts() constructor thành công")
+        } catch (e: UnsatisfiedLinkError) {
+            Log.e(TAG, "❌ UnsatisfiedLinkError trong OfflineTts constructor", e)
+            return false
+        } catch (t: Throwable) {
+            Log.e(TAG, "❌ Throwable trong OfflineTts constructor: ${t::class.java.name}", t)
+            Log.e(TAG, "   message: ${t.message}")
+            return false
+        }
 
+        // BƯỚC 6: Kiểm tra sampleRate
+        Log.i(TAG, "--- BƯỚC 6: Kiểm tra sampleRate ---")
+        try {
             val sr = tts!!.sampleRate()
-            Log.i(TAG, "   sampleRate = $sr Hz")
+            Log.i(TAG, "sampleRate = $sr Hz")
             if (sr <= 0) {
-                Log.e(TAG, "❌ sampleRate không hợp lệ ($sr)")
+                Log.e(TAG, "❌ sampleRate không hợp lệ: $sr")
                 return false
             }
+            Log.i(TAG, "✅ sampleRate OK")
+        } catch (t: Throwable) {
+            Log.e(TAG, "❌ Lỗi khi gọi sampleRate()", t)
+            return false
+        }
 
+        // BƯỚC 7: Khởi động worker
+        Log.i(TAG, "--- BƯỚC 7: Start worker ---")
+        try {
             preProcessor = PiperTextPreProcessor(context)
             startWorker()
-            Log.i(TAG, "✅ PiperTtsEngine READY")
-            true
-
-        } catch (e: UnsatisfiedLinkError) {
-            Log.e(TAG, "❌ UnsatisfiedLinkError — libsherpa-onnx-jni.so không load được", e)
-            false
-        } catch (e: Exception) {
-            Log.e(TAG, "❌ init() thất bại: ${e::class.qualifiedName}", e)
-            false
+            Log.i(TAG, "✅ Worker started")
+        } catch (t: Throwable) {
+            Log.e(TAG, "❌ Lỗi khi start worker", t)
+            return false
         }
+
+        Log.i(TAG, "═══════════════════════════════════════")
+        Log.i(TAG, "  ✅ PiperTtsEngine.init() HOÀN THÀNH")
+        Log.i(TAG, "═══════════════════════════════════════")
+        return true
     }
 
     // ── Public API ────────────────────────────────────────────────────────
