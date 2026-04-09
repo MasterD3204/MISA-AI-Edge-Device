@@ -25,6 +25,7 @@ plugins {
   alias(libs.plugins.hilt.application)
   alias(libs.plugins.oss.licenses)
   alias(libs.plugins.ksp)
+  alias(libs.plugins.jetbrains.kotlin.android)
   kotlin("kapt")
 }
 
@@ -39,6 +40,14 @@ android {
     versionCode = 23
     versionName = "1.0.11"
 
+      ndkVersion = "26.1.10909125"
+
+      versionCode = 20251217
+      versionName = "1.12.20"
+
+      ndk {
+          abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+      }
     // Needed for HuggingFace auth workflows.
     // Use the scheme of the "Redirect URLs" in HuggingFace app.
     manifestPlaceholders["appAuthRedirectScheme"] =
@@ -67,7 +76,25 @@ android {
     compose = true
     buildConfig = true
   }
+  packaging {
+      resources {
+          excludes += "/META-INF/{AL2.0,LGPL2.1}"
+      }
+      jniLibs {
+          useLegacyPackaging = true
+          pickFirsts += setOf(
+              "lib/x86/libonnxruntime.so",
+              "lib/x86_64/libonnxruntime.so",
+              "lib/armeabi-v7a/libonnxruntime.so",
+              "lib/arm64-v8a/libonnxruntime.so"
+          )
+      }
+      /*        pickFirst("lib/armeabi-v7a/libonnxruntime.so")
+              pickFirst("lib/arm64-v8a/libonnxruntime.so")*/
+  }
+
 }
+
 
 dependencies {
   implementation(libs.androidx.core.ktx)

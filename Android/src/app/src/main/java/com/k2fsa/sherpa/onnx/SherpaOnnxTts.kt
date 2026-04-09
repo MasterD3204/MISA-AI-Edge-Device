@@ -165,6 +165,13 @@ class OfflineTts(
     private external fun generateWithConfigImpl(ptr: Long, text: String, config: GenerationConfig, callback: ((samples: FloatArray) -> Int)?): GeneratedAudio
 
     companion object {
-        init { System.loadLibrary("sherpa-onnx-jni") }
+        init {
+            try {
+                System.loadLibrary("onnxruntime")
+            } catch (_: UnsatisfiedLinkError) {
+                // Some sherpa-onnx builds may bundle ORT differently.
+            }
+            System.loadLibrary("sherpa-onnx-jni")
+        }
     }
 }
