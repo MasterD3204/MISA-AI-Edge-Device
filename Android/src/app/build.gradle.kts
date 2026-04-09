@@ -80,7 +80,7 @@ android {
       }
       jniLibs {
           useLegacyPackaging = true
-          pickFirsts += listOf(
+          pickFirsts += setOf(
               "lib/x86/libonnxruntime.so",
               "lib/x86_64/libonnxruntime.so",
               "lib/armeabi-v7a/libonnxruntime.so",
