@@ -23,19 +23,6 @@ import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
-/**
- * PiperTtsEngine — TTS engine dùng Piper VITS qua SherpaOnnx JNI.
- *
- * Cách dùng:
- *   val engine = PiperTtsEngine(context)
- *   engine.onSpeakingChanged = { speaking -> ... }
- *   engine.onAllDone = { ... }
- *   if (engine.init()) {
- *     engine.speak("Xin chào")
- *   }
- *   // Khi không dùng nữa:
- *   engine.shutdown()
- */
 class PiperTtsEngine(
     private val context: Context,
     private val modelDir: String   = "vits-piper-vi-huongly",
@@ -50,12 +37,11 @@ class PiperTtsEngine(
         private const val TAG = "PiperTtsEngine"
     }
 
-    /** Callback khi bắt đầu / kết thúc phát âm thanh */
     var onSpeakingChanged: ((speaking: Boolean) -> Unit)? = null
-    /** Callback khi queue trống và tất cả audio đã phát xong */
     var onAllDone: (() -> Unit)? = null
 
     private var tts: OfflineTts? = null
+
     @Volatile private var audioTrack: AudioTrack? = null
     private val isSpeaking = AtomicBoolean(false)
     private val queue = LinkedBlockingQueue<String>()
@@ -67,7 +53,12 @@ class PiperTtsEngine(
     // ── Init ──────────────────────────────────────────────────────────────
 
     fun init(): Boolean {
-        Log.i(TAG, "init() start — modelDir=$modelDir modelName=$modelName espDataDir=$espDataDir")
+        Log.i(TAG, "═══════════════════════════════════════")
+        Log.i(TAG, "  PiperTtsEngine.init() BẮT ĐẦU")
+        Log.i(TAG, "  modelDir   = $modelDir")
+        Log.i(TAG, "  modelName  = $modelName")
+        Log.i(TAG, "  espDataDir = $espDataDir")
+        Log.i(TAG, "═══════════════════════════════════════")
 
         // Kiểm tra assets tồn tại
         try {
@@ -84,42 +75,56 @@ class PiperTtsEngine(
         }
 
         return try {
-            Log.i(TAG, "Loading native library sherpa-onnx-jni...")
+            // BƯỚC 1: Load native library
+            Log.i(TAG, "⚡ Loading native library sherpa-onnx-jni...")
             System.loadLibrary("sherpa-onnx-jni")
-            Log.i(TAG, "Native library loaded successfully")
+            Log.i(TAG, "✅ Native library loaded")
 
-            Log.i(TAG, "Copying espeak-ng-data from assets...")
+            // BƯỚC 2: Copy espeak-ng-data từ assets ra external storage
             val externalDataDir = copyDataDir(espDataDir)
             Log.i(TAG, "espeak-ng-data copied to: $externalDataDir")
 
-            val config = OfflineTtsConfig(
-                model = OfflineTtsModelConfig(
-                    vits = OfflineTtsVitsModelConfig(
-                        model   = "$modelDir/$modelName",
-                        tokens  = "$modelDir/$tokensName",
-                        dataDir = externalDataDir,
-                    ),
-                    numThreads = numThreads,
-                    provider   = "cpu",
-                    debug      = true,
-                )
+            // BƯỚC 3: Build config
+            val vitsConfig = OfflineTtsVitsModelConfig(
+                model   = "$modelDir/$modelName",
+                tokens  = "$modelDir/$tokensName",
+                dataDir = externalDataDir,
             )
-            Log.i(TAG, "Creating OfflineTts...")
+            val modelConfig = OfflineTtsModelConfig(
+                vits       = vitsConfig,
+                numThreads = numThreads,
+                provider   = "cpu",
+                debug      = true,
+            )
+            val config = OfflineTtsConfig(model = modelConfig)
+
+            Log.i(TAG, "⚡ Config:")
+            Log.i(TAG, "   model   = ${vitsConfig.model}")
+            Log.i(TAG, "   tokens  = ${vitsConfig.tokens}")
+            Log.i(TAG, "   dataDir = ${vitsConfig.dataDir}")
+
+            // BƯỚC 4: Tạo OfflineTts với assetManager
+            Log.i(TAG, "⚡ Đang gọi OfflineTts(assetManager=...)...")
             tts = OfflineTts(assetManager = context.assets, config = config)
+            Log.i(TAG, "✅ OfflineTts tạo thành công!")
+
             val sr = tts!!.sampleRate()
+            Log.i(TAG, "   sampleRate = $sr Hz")
             if (sr <= 0) {
-                Log.e(TAG, "Invalid sampleRate=$sr — model load failed")
+                Log.e(TAG, "❌ sampleRate không hợp lệ ($sr)")
                 return false
             }
-            Log.i(TAG, "OfflineTts ready — sampleRate=$sr")
+
             preProcessor = PiperTextPreProcessor(context)
             startWorker()
+            Log.i(TAG, "✅ PiperTtsEngine READY")
             true
+
         } catch (e: UnsatisfiedLinkError) {
-            Log.e(TAG, "UnsatisfiedLinkError — libsherpa-onnx-jni.so not found or not loaded", e)
+            Log.e(TAG, "❌ UnsatisfiedLinkError — libsherpa-onnx-jni.so không load được", e)
             false
         } catch (e: Exception) {
-            Log.e(TAG, "init() failed with exception", e)
+            Log.e(TAG, "❌ init() thất bại: ${e::class.qualifiedName}", e)
             false
         }
     }
@@ -150,6 +155,7 @@ class PiperTtsEngine(
         scope.cancel()
         tts?.free()
         tts = null
+        Log.i(TAG, "PiperTtsEngine shutdown")
     }
 
     // ── Worker ────────────────────────────────────────────────────────────
@@ -159,7 +165,6 @@ class PiperTtsEngine(
             while (isActive) {
                 val text = queue.poll(200, TimeUnit.MILLISECONDS) ?: continue
                 synthesizeAndPlay(text)
-                // After playing, if queue is now empty notify all done
                 if (queue.isEmpty()) onAllDone?.invoke()
             }
         }
@@ -168,12 +173,16 @@ class PiperTtsEngine(
     private fun synthesizeAndPlay(text: String) {
         val engine = tts ?: return
         try {
-            Log.d(TAG, "Synthesizing: \"${text.take(80)}\"")
+            Log.d(TAG, "🔊 Synthesizing: \"${text.take(80)}\"")
             val audio = engine.generate(text = text, sid = speakerId, speed = speed)
-            if (audio.samples.isEmpty()) { Log.w(TAG, "Empty audio"); return }
+            Log.d(TAG, "   -> ${audio.samples.size} samples @ ${audio.sampleRate}Hz")
+            if (audio.samples.isEmpty()) {
+                Log.w(TAG, "⚠ Empty audio")
+                return
+            }
             playAudio(audio.samples, audio.sampleRate)
         } catch (e: Exception) {
-            Log.e(TAG, "Synthesis error", e)
+            Log.e(TAG, "❌ Synthesis failed", e)
             isSpeaking.set(false)
             onSpeakingChanged?.invoke(false)
         }
@@ -208,7 +217,7 @@ class PiperTtsEngine(
                     .setBufferSizeInBytes(minBuf)
                     .build()
             } catch (e: Exception) {
-                Log.e(TAG, "AudioTrack build failed", e); return
+                Log.e(TAG, "❌ AudioTrack build failed", e); return
             }
 
             if (track.state != AudioTrack.STATE_INITIALIZED) {
@@ -231,7 +240,6 @@ class PiperTtsEngine(
                 offset += written
             }
 
-            // Wait for hardware buffer to drain
             val drainMs = (minBuf.toLong() * 1000) / (sampleRate * 2)
             Thread.sleep(drainMs + 50)
 
