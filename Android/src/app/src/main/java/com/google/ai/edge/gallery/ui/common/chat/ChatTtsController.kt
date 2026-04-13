@@ -129,16 +129,22 @@ fun ChatVoiceBar(
                     ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     ?.firstOrNull() ?: ""
                 partialText = ""
-                sttState = SttState.IDLE
                 if (text.isNotBlank()) {
                     Log.d(TAG, "STT result: \"$text\"")
                     onSpeechResult(text)
+                }
+                // Tự restart để mic luôn bật cho đến khi user tự tắt
+                if (sttState == SttState.LISTENING) {
+                    recognizer.startListening(buildIntent())
                 }
             }
             override fun onError(error: Int) {
                 Log.w(TAG, "STT error code=$error")
                 partialText = ""
-                sttState = SttState.IDLE
+                // Tự restart trừ khi lỗi nghiêm trọng (không có kết quả match vẫn retry)
+                if (sttState == SttState.LISTENING) {
+                    recognizer.startListening(buildIntent())
+                }
             }
         })
         onDispose { recognizer.destroy() }

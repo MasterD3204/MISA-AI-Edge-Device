@@ -157,7 +157,8 @@ class LlmChatTask @Inject constructor() : CustomTask {
           } as? ChatMessageText
           lastAiText?.content?.takeIf { it.isNotBlank() }?.let { text ->
             ttsEngine.resetStreaming()
-            ttsEngine.speak(text)
+            ttsEngine.speakStreaming(text)
+            ttsEngine.flushStreaming()
           }
         }
       },
