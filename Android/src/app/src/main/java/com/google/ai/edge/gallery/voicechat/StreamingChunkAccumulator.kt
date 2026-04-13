@@ -72,8 +72,10 @@ class StreamingChunkAccumulator(private val minWords: Int = 10) {
                 ch.isLetterOrDigit() || ch == ' ' -> sb.append(ch)
                 ch == '\n' || ch == '\r'           -> sb.append('.')
                 // Ký tự phân tách → thay bằng space để tránh 2 từ dính nhau
-                ch == '/' || ch == '-' || ch == '_' || ch == '(' || ch == ')' ||
+                ch == '/' || ch == '-' || ch == '_' ||
                 ch == '[' || ch == ']' || ch == '"' || ch == '\'' -> sb.append(' ')
+                // Ngoặc đơn → dấu phẩy để TTS ngắt nghỉ tự nhiên
+                ch == '(' || ch == ')' -> sb.append(',')
                 // bỏ qua mọi ký tự còn lại (emoji, ký hiệu đặc biệt, ...)
             }
         }
