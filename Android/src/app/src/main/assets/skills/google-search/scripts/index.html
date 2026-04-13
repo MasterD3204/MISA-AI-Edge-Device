@@ -94,8 +94,19 @@ Licensed under the Apache License, Version 2.0
           }
 
           if (!aiText) {
-            console.log(`[google-search] ❌ Không parse được AI Overview`);
-            return JSON.stringify({ result: `Không tìm thấy kết quả nào cho "${query}".` });
+            console.log(`[google-search] ❌ Không có AI Overview → fallback lấy snippet 2 trang đầu`);
+            const organicSnippets = (serpData.organic_results || [])
+              .filter((r) => r.snippet)
+              .slice(0, 2);
+            if (organicSnippets.length > 0) {
+              aiText = organicSnippets
+                .map((r) => `${r.title}\n${r.snippet}`)
+                .join("\n\n");
+              console.log(`[google-search] ✅ Fallback: lấy ${organicSnippets.length} snippet`);
+            } else {
+              console.log(`[google-search] ❌ Không có snippet nào`);
+              return JSON.stringify({ result: `Không tìm thấy kết quả nào cho "${query}".` });
+            }
           }
 
           const output = `Kết quả tìm kiếm: "${query}"\n\n--- AI OVERVIEW ---\n${aiText}`;
