@@ -92,7 +92,6 @@ import com.google.ai.edge.gallery.ui.common.chat.ChatVoiceBar
 import com.google.ai.edge.gallery.ui.common.chat.rememberPiperTtsEngine
 import com.google.ai.edge.gallery.ui.common.chat.ChatMessageType
 import com.google.ai.edge.gallery.ui.common.chat.ChatMessageWebView
-import com.google.ai.edge.gallery.ui.common.chat.ChatSide
 import com.google.ai.edge.gallery.ui.common.chat.LogMessage
 import com.google.ai.edge.gallery.ui.common.chat.LogMessageLevel
 import com.google.ai.edge.gallery.ui.common.chat.SendMessageTrigger
@@ -146,6 +145,16 @@ fun AgentChatScreen(
     modelManagerViewModel = modelManagerViewModel,
     taskId = BuiltInTaskId.LLM_AGENT_CHAT,
     navigateUp = navigateUp,
+    onBeforeGenerate = {
+      if (ttsEnabled && ttsEngine != null) {
+        ttsEngine.resetStreaming()
+      }
+    },
+    onPartialResult = { partial ->
+      if (ttsEnabled && ttsEngine != null) {
+        ttsEngine.speakStreaming(partial)
+      }
+    },
     onFirstToken = { model ->
       updateProgressPanel(viewModel = viewModel, model = model, agentTools = agentTools)
     },
@@ -193,17 +202,9 @@ fun AgentChatScreen(
 
       updateProgressPanel(viewModel = viewModel, model = model, agentTools = agentTools)
 
-      // Đọc phản hồi AI nếu TTS được bật
+      // Flush streaming TTS khi LLM xong
       if (ttsEnabled && ttsEngine != null) {
-        val messages = uiState.messagesByModel[model.name] ?: return@LlmChatScreen
-        val lastAiText = messages.lastOrNull {
-          it is ChatMessageText && it.side == ChatSide.AGENT
-        } as? ChatMessageText
-        lastAiText?.content?.takeIf { it.isNotBlank() }?.let { text ->
-          ttsEngine.resetStreaming()
-          ttsEngine.speakStreaming(text)
-          ttsEngine.flushStreaming()
-        }
+        ttsEngine.flushStreaming()
       }
     },
     onResetSessionClickedOverride = { task, model ->
