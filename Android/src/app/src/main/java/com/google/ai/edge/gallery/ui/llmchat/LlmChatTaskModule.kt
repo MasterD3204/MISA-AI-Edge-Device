@@ -42,6 +42,7 @@ import com.google.ai.edge.gallery.data.Task
 import com.google.ai.edge.gallery.runtime.runtimeHelper
 import com.google.ai.edge.gallery.ui.theme.emptyStateContent
 import com.google.ai.edge.gallery.ui.theme.emptyStateTitle
+import com.google.ai.edge.litertlm.Contents
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -49,6 +50,12 @@ import dagger.hilt.components.SingletonComponent
 import dagger.multibindings.IntoSet
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
+
+/** System prompt chung áp dụng cho tất cả các chế độ chat. */
+const val VIETNAMESE_SYSTEM_PROMPT = """Bạn là trợ lý AI. Hãy luôn tuân thủ các quy tắc sau:
+- Chỉ trả lời bằng tiếng Việt.
+- Không sử dụng từ tiếng Anh trong câu trả lời.
+- Không trả lời dưới dạng bảng."""
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // AI Chat — unified chat with smart modality switching.
@@ -78,6 +85,7 @@ class LlmChatTask @Inject constructor() : CustomTask {
       sourceCodeUrl =
         "https://github.com/google-ai-edge/gallery/blob/main/Android/src/app/src/main/java/com/google/ai/edge/gallery/ui/llmchat/LlmChatModelHelper.kt",
       textInputPlaceHolderRes = R.string.text_input_placeholder_llm_chat,
+      defaultSystemPrompt = VIETNAMESE_SYSTEM_PROMPT,
     )
 
   // Initialise with all backends enabled so one conversation handles text + image + audio.
@@ -94,6 +102,7 @@ class LlmChatTask @Inject constructor() : CustomTask {
       supportAudio = true,
       onDone = onDone,
       coroutineScope = coroutineScope,
+      systemInstruction = Contents.of(VIETNAMESE_SYSTEM_PROMPT),
     )
   }
 

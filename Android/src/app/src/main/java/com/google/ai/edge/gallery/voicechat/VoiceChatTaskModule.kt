@@ -13,7 +13,9 @@ import com.google.ai.edge.gallery.data.Category
 import com.google.ai.edge.gallery.data.Model
 import com.google.ai.edge.gallery.data.Task
 import com.google.ai.edge.gallery.runtime.runtimeHelper
+import com.google.ai.edge.gallery.ui.llmchat.VIETNAMESE_SYSTEM_PROMPT
 import com.google.ai.edge.gallery.ui.modelmanager.ModelManagerViewModel
+import com.google.ai.edge.litertlm.Contents
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -35,6 +37,7 @@ class VoiceChatTask @Inject constructor() : CustomTask {
       docUrl = "https://github.com/google-ai-edge/LiteRT-LM/blob/main/kotlin/README.md",
       sourceCodeUrl = "",
       textInputPlaceHolderRes = android.R.string.ok,
+      defaultSystemPrompt = VIETNAMESE_SYSTEM_PROMPT,
     )
 
   override fun initializeModelFn(
@@ -50,6 +53,7 @@ class VoiceChatTask @Inject constructor() : CustomTask {
       supportAudio = false,
       onDone = onDone,
       coroutineScope = coroutineScope,
+      systemInstruction = Contents.of(VIETNAMESE_SYSTEM_PROMPT),
     )
   }
 
