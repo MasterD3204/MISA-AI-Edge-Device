@@ -146,7 +146,7 @@ class LlmChatTask @Inject constructor() : CustomTask {
       showImagePicker = true,
       showAudioPicker = true,
       sendMessageTrigger = sendMessageTrigger,
-      onFirstToken = { _ ->
+      onBeforeGenerate = {
         if (ttsEnabled && ttsEngine != null) {
           ttsEngine.resetStreaming()
         }

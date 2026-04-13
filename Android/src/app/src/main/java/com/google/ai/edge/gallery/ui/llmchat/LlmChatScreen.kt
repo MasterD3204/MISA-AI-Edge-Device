@@ -60,6 +60,7 @@ fun LlmChatScreen(
   taskId: String = BuiltInTaskId.LLM_CHAT,
   onFirstToken: (Model) -> Unit = {},
   onPartialResult: (String) -> Unit = {},
+  onBeforeGenerate: () -> Unit = {},
   onGenerateResponseDone: (Model) -> Unit = {},
   onSkillClicked: () -> Unit = {},
   onResetSessionClickedOverride: ((Task, Model) -> Unit)? = null,
@@ -83,6 +84,7 @@ fun LlmChatScreen(
     onSkillClicked = onSkillClicked,
     onFirstToken = onFirstToken,
     onPartialResult = onPartialResult,
+    onBeforeGenerate = onBeforeGenerate,
     onGenerateResponseDone = onGenerateResponseDone,
     onResetSessionClickedOverride = onResetSessionClickedOverride,
     composableBelowMessageList = composableBelowMessageList,
@@ -180,6 +182,7 @@ fun ChatViewWrapper(
   onSkillClicked: () -> Unit = {},
   onFirstToken: (Model) -> Unit = {},
   onPartialResult: (String) -> Unit = {},
+  onBeforeGenerate: () -> Unit = {},
   onGenerateResponseDone: (Model) -> Unit = {},
   onResetSessionClickedOverride: ((Task, Model) -> Unit)? = null,
   composableBelowMessageList: @Composable (Model) -> Unit = {},
@@ -223,6 +226,7 @@ fun ChatViewWrapper(
         if (text.isNotEmpty()) {
           modelManagerViewModel.addTextInputHistory(text)
         }
+        onBeforeGenerate()
         viewModel.generateResponse(
           model = model,
           input = text,
