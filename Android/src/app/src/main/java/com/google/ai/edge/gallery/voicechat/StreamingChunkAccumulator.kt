@@ -63,8 +63,11 @@ class StreamingChunkAccumulator(private val minWords: Int = 10) {
      *  - Đảm bảo có đúng 1 space SAU dấu . hoặc , (nếu còn ký tự phía sau)
      */
     private fun normalizePunctuation(text: String): String {
-        val sb = StringBuilder(text.length)
-        for (ch in text) {
+        // Loại bỏ "v.v." (và các biến thể) trước khi xử lý ký tự
+        val noVvv = text.replace(Regex("""v\.v\.""", RegexOption.IGNORE_CASE), "")
+
+        val sb = StringBuilder(noVvv.length)
+        for (ch in noVvv) {
             when {
                 ch == ':' || ch == ';'         -> sb.append(',')
                 ch == '?' || ch == '!'         -> sb.append('.')
