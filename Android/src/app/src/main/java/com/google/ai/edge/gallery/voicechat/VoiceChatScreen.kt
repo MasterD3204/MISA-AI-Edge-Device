@@ -235,6 +235,7 @@ fun VoiceChatScreen(
         messages.add(VoiceMessage(VoiceSender.USER, userText))
         chatState  = VoiceChatState.PROCESSING
         statusText = "Đang xử lý..."
+        if (ttsReady) ttsEngine.resetStreaming()
 
         scope.launch(Dispatchers.Default) {
             Log.d(TAG, "Waiting for model instance... current=${model.instance}")
@@ -252,6 +253,17 @@ fun VoiceChatScreen(
             }
             Log.d(TAG, "Model instance ready, running inference")
 
+            // Thêm placeholder message cho AI (sẽ cập nhật dần theo streaming)
+            var msgIdx = -1
+            withContext(Dispatchers.Main) {
+                messages.add(VoiceMessage(VoiceSender.AI, ""))
+                msgIdx = messages.size - 1
+                if (ttsReady) {
+                    chatState  = VoiceChatState.SPEAKING
+                    statusText = "Đang nói..."
+                }
+            }
+
             val responseBuilder = StringBuilder()
             val done = kotlinx.coroutines.CompletableDeferred<Unit>()
 
@@ -262,6 +274,19 @@ fun VoiceChatScreen(
                     if (partial.isNotEmpty()) {
                         Log.v(TAG, "LLM partial: \"${partial.take(40)}\"")
                         responseBuilder.append(partial)
+
+                        // Cập nhật raw text lên UI (hiển thị streaming)
+                        val rawSoFar = responseBuilder.toString()
+                        scope.launch(Dispatchers.Main) {
+                            if (msgIdx < messages.size) {
+                                messages[msgIdx] = VoiceMessage(VoiceSender.AI, rawSoFar)
+                            }
+                        }
+
+                        // Feed partial vào TTS pipeline (nếu TTS sẵn sàng)
+                        if (ttsReady) {
+                            ttsEngine.speakStreaming(partial)
+                        }
                     }
                     if (isDone) {
                         Log.d(TAG, "LLM done, total length=${responseBuilder.length}")
@@ -282,24 +307,28 @@ fun VoiceChatScreen(
             val aiText = responseBuilder.toString().trim()
             Log.d(TAG, "AI response (${aiText.length} chars): \"${aiText.take(80)}\"")
 
+            // Flush phần text còn lại trong accumulator vào TTS
+            if (ttsReady) {
+                ttsEngine.flushStreaming()
+            }
+
             withContext(Dispatchers.Main) {
-                if (aiText.isNotEmpty()) {
-                    messages.add(VoiceMessage(VoiceSender.AI, aiText))
-                    if (ttsReady) {
-                        Log.d(TAG, "Calling ttsEngine.speak()")
-                        chatState  = VoiceChatState.SPEAKING
-                        statusText = "Đang nói..."
-                        ttsEngine.speak(aiText)
-                    } else {
-                        Log.w(TAG, "TTS not ready — skipping speak")
-                        statusText = "TTS chưa sẵn sàng (thiếu model Piper)"
-                        chatState  = VoiceChatState.IDLE
-                    }
-                } else {
+                // Đảm bảo UI hiển thị full raw text cuối cùng
+                if (msgIdx < messages.size) {
+                    messages[msgIdx] = VoiceMessage(VoiceSender.AI, aiText)
+                }
+
+                if (aiText.isEmpty()) {
                     Log.w(TAG, "AI response empty")
                     chatState  = VoiceChatState.IDLE
                     statusText = "Nhấn mic để bắt đầu nói"
+                } else if (!ttsReady) {
+                    Log.w(TAG, "TTS not ready — skipping speak")
+                    statusText = "TTS chưa sẵn sàng (thiếu model Piper)"
+                    chatState  = VoiceChatState.IDLE
                 }
+                // Nếu ttsReady: chatState đã được set SPEAKING ở trên,
+                // onAllDone callback của engine sẽ reset về IDLE khi xong.
             }
         }
     }

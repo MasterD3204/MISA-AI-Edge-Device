@@ -20,8 +20,32 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.PriorityBlockingQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
+
+/**
+ * Item trong ordered synthesis queue.
+ * Mỗi chunk mang một index tăng dần để đảm bảo phát đúng thứ tự.
+ */
+private data class SynthesisItem(
+    val index: Int,
+    val text: String,
+) : Comparable<SynthesisItem> {
+    override fun compareTo(other: SynthesisItem) = index.compareTo(other.index)
+}
+
+/**
+ * Audio đã được synthesize, chờ phát theo thứ tự index.
+ */
+private data class AudioItem(
+    val index: Int,
+    val samples: FloatArray,
+    val sampleRate: Int,
+) : Comparable<AudioItem> {
+    override fun compareTo(other: AudioItem) = index.compareTo(other.index)
+}
 
 class PiperTtsEngine(
     private val context: Context,
@@ -44,11 +68,26 @@ class PiperTtsEngine(
 
     @Volatile private var audioTrack: AudioTrack? = null
     private val isSpeaking = AtomicBoolean(false)
-    private val queue = LinkedBlockingQueue<String>()
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private var worker: Job? = null
     private val playLock = Any()
+
+    // ── Ordered synthesis pipeline ────────────────────────────────────────
+    // synthQueue: chunks chờ synthesize (LinkedBlockingQueue, vào theo thứ tự)
+    private val synthQueue = LinkedBlockingQueue<SynthesisItem>()
+    // audioQueue: audio đã synthesize, sắp xếp theo index để phát đúng thứ tự
+    private val audioQueue = PriorityBlockingQueue<AudioItem>()
+    // nextPlayIndex: index tiếp theo cần phát
+    private val nextPlayIndex = AtomicInteger(0)
+    // nextEnqueueIndex: index tiếp theo sẽ gán khi enqueue chunk
+    private val nextEnqueueIndex = AtomicInteger(0)
+    // pendingSynthCount: số chunk đang chờ synthesize hoặc chờ phát
+    private val pendingSynthCount = AtomicInteger(0)
+
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private var synthWorker: Job? = null
+    private var playWorker: Job? = null
+
     private var preProcessor: PiperTextPreProcessor? = null
+    private var accumulator: StreamingChunkAccumulator? = null
 
     // ── Init ──────────────────────────────────────────────────────────────
 
@@ -194,14 +233,16 @@ class PiperTtsEngine(
             return false
         }
 
-        // BƯỚC 7: Khởi động worker
-        Log.i(TAG, "--- BƯỚC 7: Start worker ---")
+        // BƯỚC 7: Khởi động workers
+        Log.i(TAG, "--- BƯỚC 7: Start workers ---")
         try {
             preProcessor = PiperTextPreProcessor(context)
-            startWorker()
-            Log.i(TAG, "✅ Worker started")
+            accumulator  = StreamingChunkAccumulator()
+            startSynthWorker()
+            startPlayWorker()
+            Log.i(TAG, "✅ Workers started")
         } catch (t: Throwable) {
-            Log.e(TAG, "❌ Lỗi khi start worker", t)
+            Log.e(TAG, "❌ Lỗi khi start workers", t)
             return false
         }
 
@@ -213,14 +254,50 @@ class PiperTtsEngine(
 
     // ── Public API ────────────────────────────────────────────────────────
 
+    /**
+     * Phát toàn bộ text (không streaming).
+     * Dùng khi có sẵn toàn bộ response.
+     */
     fun speak(text: String) {
         if (tts == null || text.isBlank()) return
         val processed = preProcessor?.process(text) ?: text
-        queue.offer(processed.trim())
+        enqueueChunk(processed.trim())
+    }
+
+    /**
+     * Nạp partial text streaming từ LLM.
+     * Gọi lặp lại mỗi khi có partial mới.
+     * Các chunk đủ dài sẽ được enqueue ngay vào pipeline TTS.
+     */
+    fun speakStreaming(partial: String) {
+        if (tts == null || partial.isEmpty()) return
+        val acc = accumulator ?: return
+        val chunks = acc.feed(partial)
+        chunks.forEach { chunk ->
+            val processed = preProcessor?.process(chunk) ?: chunk
+            if (processed.isNotBlank()) enqueueChunk(processed.trim())
+        }
+    }
+
+    /**
+     * Gọi khi LLM done để flush phần text còn lại trong accumulator.
+     */
+    fun flushStreaming() {
+        if (tts == null) return
+        val acc = accumulator ?: return
+        val remaining = acc.flush()
+        if (!remaining.isNullOrBlank()) {
+            val processed = preProcessor?.process(remaining) ?: remaining
+            if (processed.isNotBlank()) enqueueChunk(processed.trim())
+        }
     }
 
     fun stop() {
-        queue.clear()
+        synthQueue.clear()
+        audioQueue.clear()
+        pendingSynthCount.set(0)
+        nextPlayIndex.set(nextEnqueueIndex.get()) // skip tất cả pending
+        accumulator = StreamingChunkAccumulator()  // reset accumulator
         isSpeaking.set(false)
         synchronized(playLock) {
             try { audioTrack?.stop() } catch (_: Exception) {}
@@ -229,46 +306,114 @@ class PiperTtsEngine(
         }
     }
 
+    /**
+     * Reset pipeline streaming cho turn mới.
+     * Gọi trước khi bắt đầu speakStreaming() cho response mới.
+     */
+    fun resetStreaming() {
+        synthQueue.clear()
+        audioQueue.clear()
+        pendingSynthCount.set(0)
+        val current = nextEnqueueIndex.get()
+        nextPlayIndex.set(current)
+        accumulator = StreamingChunkAccumulator()
+        Log.d(TAG, "resetStreaming() — indices reset to $current")
+    }
+
     fun isSpeaking(): Boolean = isSpeaking.get()
 
     fun shutdown() {
         stop()
-        worker?.cancel()
+        synthWorker?.cancel()
+        playWorker?.cancel()
         scope.cancel()
         tts?.free()
         tts = null
         Log.i(TAG, "PiperTtsEngine shutdown")
     }
 
-    // ── Worker ────────────────────────────────────────────────────────────
+    // ── Internal enqueue ──────────────────────────────────────────────────
 
-    private fun startWorker() {
-        worker = scope.launch {
+    /**
+     * Reset counter khi pipeline rỗng, tránh index tăng vô hạn.
+     * Gán index và enqueue vào synthQueue.
+     */
+    private fun enqueueChunk(text: String) {
+        val idx = nextEnqueueIndex.getAndIncrement()
+        pendingSynthCount.incrementAndGet()
+        synthQueue.offer(SynthesisItem(index = idx, text = text))
+        Log.d(TAG, "Enqueued chunk #$idx: \"${text.take(60)}\"")
+    }
+
+    // ── Synth Worker ──────────────────────────────────────────────────────
+
+    /**
+     * Worker tổng hợp audio: lấy chunk từ synthQueue theo thứ tự enqueue,
+     * synthesize, rồi đưa vào audioQueue (PriorityQueue theo index).
+     */
+    private fun startSynthWorker() {
+        synthWorker = scope.launch {
             while (isActive) {
-                val text = queue.poll(200, TimeUnit.MILLISECONDS) ?: continue
-                synthesizeAndPlay(text)
-                if (queue.isEmpty()) onAllDone?.invoke()
+                val item = synthQueue.poll(200, TimeUnit.MILLISECONDS) ?: continue
+                try {
+                    Log.d(TAG, "🔊 Synthesizing #${item.index}: \"${item.text.take(60)}\"")
+                    val engine = tts ?: continue
+                    val audio = engine.generate(text = item.text, sid = speakerId, speed = speed)
+                    if (audio.samples.isNotEmpty()) {
+                        audioQueue.offer(AudioItem(item.index, audio.samples, audio.sampleRate))
+                        Log.d(TAG, "   #${item.index} synthesized: ${audio.samples.size} samples")
+                    } else {
+                        Log.w(TAG, "   #${item.index} empty audio — skip")
+                        pendingSynthCount.decrementAndGet()
+                        checkAllDone()
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "❌ Synthesis #${item.index} failed", e)
+                    pendingSynthCount.decrementAndGet()
+                    checkAllDone()
+                }
             }
         }
     }
 
-    private fun synthesizeAndPlay(text: String) {
-        val engine = tts ?: return
-        try {
-            Log.d(TAG, "🔊 Synthesizing: \"${text.take(80)}\"")
-            val audio = engine.generate(text = text, sid = speakerId, speed = speed)
-            Log.d(TAG, "   -> ${audio.samples.size} samples @ ${audio.sampleRate}Hz")
-            if (audio.samples.isEmpty()) {
-                Log.w(TAG, "⚠ Empty audio")
-                return
+    // ── Play Worker ───────────────────────────────────────────────────────
+
+    /**
+     * Worker phát audio: lấy AudioItem từ audioQueue theo thứ tự index tăng dần.
+     * Chỉ phát item có index == nextPlayIndex, còn lại giữ trong queue chờ.
+     */
+    private fun startPlayWorker() {
+        playWorker = scope.launch {
+            while (isActive) {
+                val next = nextPlayIndex.get()
+                val item = audioQueue.peek()
+
+                if (item == null || item.index != next) {
+                    // Chưa có audio đúng thứ tự → chờ ngắn
+                    kotlinx.coroutines.delay(20)
+                    continue
+                }
+
+                // Đúng thứ tự → lấy ra và phát
+                audioQueue.poll()
+                nextPlayIndex.incrementAndGet()
+
+                Log.d(TAG, "▶ Playing #${item.index}")
+                playAudio(item.samples, item.sampleRate)
+
+                pendingSynthCount.decrementAndGet()
+                checkAllDone()
             }
-            playAudio(audio.samples, audio.sampleRate)
-        } catch (e: Exception) {
-            Log.e(TAG, "❌ Synthesis failed", e)
-            isSpeaking.set(false)
-            onSpeakingChanged?.invoke(false)
         }
     }
+
+    private fun checkAllDone() {
+        if (pendingSynthCount.get() <= 0 && synthQueue.isEmpty() && audioQueue.isEmpty()) {
+            onAllDone?.invoke()
+        }
+    }
+
+    // ── Audio Playback ────────────────────────────────────────────────────
 
     private fun playAudio(samples: FloatArray, sampleRate: Int) {
         synchronized(playLock) {
