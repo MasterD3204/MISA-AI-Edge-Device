@@ -241,6 +241,18 @@ Licensed under the Apache License, Version 2.0
           // Step 1: SerpAPI search
           const serpData = await serpSearch(query, lang);
 
+          // Log các top-level keys để biết SerpAPI trả về những field nào
+          console.log(`[google-search] 📦 SerpAPI response keys: ${Object.keys(serpData).join(", ")}`);
+          if (serpData.ai_overview) {
+            console.log(`[google-search] ✅ ai_overview CÓ — type: ${typeof serpData.ai_overview}`);
+            console.log(`[google-search] ai_overview raw: ${JSON.stringify(serpData.ai_overview).substring(0, 500)}`);
+          } else {
+            console.log(`[google-search] ❌ ai_overview KHÔNG có trong response`);
+          }
+          if (serpData.answer_box) {
+            console.log(`[google-search] ✅ answer_box CÓ: ${JSON.stringify(serpData.answer_box).substring(0, 300)}`);
+          }
+
           if (serpData.error) {
             return JSON.stringify({ error: `SerpAPI: ${serpData.error}` });
           }
