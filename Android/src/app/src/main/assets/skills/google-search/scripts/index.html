@@ -97,7 +97,7 @@ Licensed under the Apache License, Version 2.0
             console.log(`[google-search] ❌ Không có AI Overview → fallback lấy snippet 2 trang đầu`);
             const organicSnippets = (serpData.organic_results || [])
               .filter((r) => r.snippet)
-              .slice(0, 2);
+              .slice(0, 5);
             if (organicSnippets.length > 0) {
               aiText = organicSnippets
                 .map((r) => `${r.title}\n${r.snippet}`)
