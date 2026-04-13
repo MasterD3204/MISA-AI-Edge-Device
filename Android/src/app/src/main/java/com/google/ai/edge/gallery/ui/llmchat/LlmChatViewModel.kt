@@ -53,6 +53,7 @@ open class LlmChatViewModelBase() : ChatViewModel() {
     images: List<Bitmap> = listOf(),
     audioMessages: List<ChatMessageAudioClip> = listOf(),
     onFirstToken: (Model) -> Unit = {},
+    onPartialResult: (String) -> Unit = {},
     onDone: () -> Unit = {},
     onError: (String) -> Unit,
     allowThinking: Boolean = false,
@@ -164,6 +165,10 @@ open class LlmChatViewModelBase() : ChatViewModel() {
                     partialContent = partialResult,
                     latencyMs = latencyMs.toFloat(),
                   )
+                }
+                // Notify external listener với partial text (bỏ qua thinking)
+                if (partialResult.isNotEmpty()) {
+                  onPartialResult(partialResult)
                 }
               }
 

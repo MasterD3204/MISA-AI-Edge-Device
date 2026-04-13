@@ -59,6 +59,7 @@ fun LlmChatScreen(
   modifier: Modifier = Modifier,
   taskId: String = BuiltInTaskId.LLM_CHAT,
   onFirstToken: (Model) -> Unit = {},
+  onPartialResult: (String) -> Unit = {},
   onGenerateResponseDone: (Model) -> Unit = {},
   onSkillClicked: () -> Unit = {},
   onResetSessionClickedOverride: ((Task, Model) -> Unit)? = null,
@@ -81,6 +82,7 @@ fun LlmChatScreen(
     modifier = modifier,
     onSkillClicked = onSkillClicked,
     onFirstToken = onFirstToken,
+    onPartialResult = onPartialResult,
     onGenerateResponseDone = onGenerateResponseDone,
     onResetSessionClickedOverride = onResetSessionClickedOverride,
     composableBelowMessageList = composableBelowMessageList,
@@ -177,6 +179,7 @@ fun ChatViewWrapper(
   modifier: Modifier = Modifier,
   onSkillClicked: () -> Unit = {},
   onFirstToken: (Model) -> Unit = {},
+  onPartialResult: (String) -> Unit = {},
   onGenerateResponseDone: (Model) -> Unit = {},
   onResetSessionClickedOverride: ((Task, Model) -> Unit)? = null,
   composableBelowMessageList: @Composable (Model) -> Unit = {},
@@ -226,6 +229,7 @@ fun ChatViewWrapper(
           images = images,
           audioMessages = audioMessages,
           onFirstToken = onFirstToken,
+          onPartialResult = onPartialResult,
           onDone = { onGenerateResponseDone(model) },
           onError = { errorMessage ->
             viewModel.handleError(
