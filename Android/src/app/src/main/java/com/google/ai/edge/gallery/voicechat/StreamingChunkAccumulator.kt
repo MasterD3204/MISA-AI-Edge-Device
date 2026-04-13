@@ -70,6 +70,9 @@ class StreamingChunkAccumulator(private val minWords: Int = 10) {
                 ch == '?' || ch == '!'         -> sb.append('.')
                 ch == '.' || ch == ','         -> sb.append(ch)
                 ch.isLetterOrDigit() || ch == ' ' || ch == '\n' || ch == '\r' -> sb.append(ch)
+                // Ký tự phân tách → thay bằng space để tránh 2 từ dính nhau
+                ch == '/' || ch == '-' || ch == '_' || ch == '(' || ch == ')' ||
+                ch == '[' || ch == ']' || ch == '"' || ch == '\'' -> sb.append(' ')
                 // bỏ qua mọi ký tự còn lại (emoji, ký hiệu đặc biệt, ...)
             }
         }
@@ -77,7 +80,8 @@ class StreamingChunkAccumulator(private val minWords: Int = 10) {
         val noSpaceBefore = sb.toString().replace(Regex("""\s+([.,])"""), "$1")
         // Đảm bảo có đúng 1 space SAU dấu . hoặc , (khi phía sau là ký tự không phải space)
         val spacedAfter = noSpaceBefore.replace(Regex("""([.,])(?!\s|$)"""), "$1 ")
-        return spacedAfter
+        // Chuẩn hóa nhiều space liên tiếp thành 1
+        return spacedAfter.replace(Regex("""\s{2,}"""), " ").trim()
     }
 
     /**
