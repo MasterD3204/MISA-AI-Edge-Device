@@ -14,16 +14,17 @@ Licensed under the Apache License, Version 2.0
       const GOOGLE_API_KEY = "AIzaSyD5ZuvFYdZxvioaP6OKFNtdAlEgnNehOCs";
       const GOOGLE_CSE_ID = "024969196858e485f";
 
-      // ── CORS-free proxy list (tried in order) ───────────────────────────────
-      // Each entry is a function: url → proxied fetch URL string
       const PROXY_BUILDERS = [
         (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
         (url) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
         (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
       ];
+      const PROXY_NAMES = ["corsproxy.io", "allorigins.win", "codetabs.com"];
 
-      // ── Fetch via Google Custom Search JSON API (no CORS issue) ─────────────
+      // ── Google Custom Search ─────────────────────────────────────────────────
       async function googleSearch(query, num, lang) {
+        console.log(`[google-search] 🔍 Query: "${query}" | num=${num} | lang=${lang}`);
+
         const params = new URLSearchParams({
           key: GOOGLE_API_KEY,
           cx: GOOGLE_CSE_ID,
@@ -34,6 +35,7 @@ Licensed under the Apache License, Version 2.0
           params.set("lr", `lang_${lang}`);
           params.set("hl", lang);
         }
+
         const res = await fetch(
           `https://www.googleapis.com/customsearch/v1?${params.toString()}`,
           { signal: AbortSignal.timeout(10000) }
@@ -43,70 +45,156 @@ Licensed under the Apache License, Version 2.0
           throw new Error(`Google API error ${res.status}: ${errBody.substring(0, 300)}`);
         }
         const data = await res.json();
-
-        // Extract AI Overview / answer box from CSE promotions or snippets
-        let aiOverview = null;
-        if (data.spelling?.correctedQuery) {
-          // Note spelling correction
-        }
-        // CSE can return "searchInformation" with total results count
         const totalResults = data.searchInformation?.totalResults || "0";
 
         if (!data.items || data.items.length === 0) {
-          return { items: [], totalResults, aiOverview };
+          console.log(`[google-search] ⚠️ Không tìm thấy kết quả`);
+          return { items: [], totalResults };
         }
 
         const items = data.items.map((item) => ({
           title: item.title || "",
           url: item.link || "",
           snippet: item.snippet ? item.snippet.replace(/\n/g, " ").trim() : "",
-          // Rich snippet date if available
           date: item.pagemap?.metatags?.[0]?.["article:published_time"]
             || item.pagemap?.metatags?.[0]?.["og:updated_time"]
             || "",
         }));
 
-        return { items, totalResults, aiOverview };
+        console.log(`[google-search] ✅ CSE trả về ${items.length} kết quả (tổng ~${parseInt(totalResults).toLocaleString()}):`);
+        items.forEach((r, i) => {
+          console.log(`  [${i + 1}] ${r.title}`);
+          console.log(`       URL: ${r.url}`);
+          if (r.snippet) console.log(`       Snippet: ${r.snippet.substring(0, 120)}...`);
+        });
+
+        return { items, totalResults };
       }
 
-      // ── Fetch page content through CORS proxies with fallback ────────────────
-      async function fetchPageContent(url, maxChars) {
-        for (const buildProxy of PROXY_BUILDERS) {
+      // ── Fetch page content qua proxy với fallback ────────────────────────────
+      async function fetchPageContent(url, maxChars, sourceIndex) {
+        const label = `[Nguồn ${sourceIndex}]`;
+
+        for (let pi = 0; pi < PROXY_BUILDERS.length; pi++) {
+          const proxyName = PROXY_NAMES[pi];
+          const proxyUrl = PROXY_BUILDERS[pi](url);
+          console.log(`[google-search] ${label} Đang fetch qua proxy ${pi + 1}/${PROXY_BUILDERS.length} (${proxyName}): ${url}`);
+
           try {
-            const proxyUrl = buildProxy(url);
+            const t0 = Date.now();
             const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(7000) });
-            if (!res.ok) continue;
+            const elapsed = Date.now() - t0;
+
+            if (!res.ok) {
+              console.log(`[google-search] ${label} Proxy ${proxyName} HTTP ${res.status} (${elapsed}ms) — thử proxy tiếp`);
+              continue;
+            }
 
             let html = "";
             const contentType = res.headers.get("content-type") || "";
-
             if (contentType.includes("application/json")) {
-              // allorigins / codetabs return JSON with .contents field
               const json = await res.json();
               html = json.contents || json.data || "";
             } else {
-              // corsproxy.io returns raw HTML directly
               html = await res.text();
             }
 
-            if (!html) continue;
+            if (!html) {
+              console.log(`[google-search] ${label} Proxy ${proxyName} trả về nội dung rỗng (${elapsed}ms) — thử proxy tiếp`);
+              continue;
+            }
 
-            const text = extractText(html, maxChars);
-            if (text && text.length > 150) return text;
-          } catch (_) {
-            // Try next proxy
+            const rawText = extractText(html, maxChars);
+            const text = formatTextForLLM(rawText);
+            if (text && text.length > 150) {
+              console.log(`[google-search] ${label} ✅ Proxy ${proxyName} thành công (${elapsed}ms) — ${text.length} ký tự`);
+              console.log(`[google-search] ${label} Nội dung (200 ký tự đầu): ${text.substring(0, 200).replace(/\n/g, " ")}...`);
+              return text;
+            } else {
+              console.log(`[google-search] ${label} Proxy ${proxyName} nội dung quá ngắn (${text?.length ?? 0} ký tự) — thử proxy tiếp`);
+            }
+          } catch (e) {
+            console.log(`[google-search] ${label} Proxy ${proxyName} lỗi: ${e.message} — thử proxy tiếp`);
           }
         }
-        return null; // All proxies failed
+
+        console.log(`[google-search] ${label} ❌ Tất cả proxy thất bại — dùng snippet`);
+        return null;
       }
 
-      // ── Extract readable text from HTML ─────────────────────────────────────
+      // ── Format text cho LLM dễ đọc ──────────────────────────────────────────
+      function formatTextForLLM(rawText) {
+        if (!rawText) return null;
+
+        let text = rawText;
+
+        // 1. Chuẩn hóa xuống dòng
+        text = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+
+        // 2. Bỏ các dòng chỉ có ký tự đặc biệt / separator vô nghĩa
+        text = text
+          .split("\n")
+          .filter((line) => {
+            const t = line.trim();
+            if (t.length === 0) return false;
+            if (/^[-=_*|#]{3,}$/.test(t)) return false; // dòng chỉ có dashes/equals
+            if (/^[•·▪▸►→\-]\s*$/.test(t)) return false; // bullet trống
+            if (t.length < 3) return false; // quá ngắn
+            return true;
+          })
+          .join("\n");
+
+        // 3. Gộp nhiều dòng trắng liên tiếp thành 1
+        text = text.replace(/\n{3,}/g, "\n\n");
+
+        // 4. Loại bỏ ký tự rác từ web scraping
+        text = text
+          .replace(/\[object Object\]/g, "")
+          .replace(/undefined/g, "")
+          .replace(/\t/g, " ")
+          .replace(/[ ]{3,}/g, "  ");
+
+        // 5. Tách thành đoạn — dòng ngắn < 60 ký tự là heading, dòng dài gộp thành paragraph
+        const lines = text.split("\n");
+        const paragraphs = [];
+        let buffer = "";
+
+        for (const line of lines) {
+          const t = line.trim();
+          if (t.length === 0) {
+            if (buffer) { paragraphs.push(buffer.trim()); buffer = ""; }
+            continue;
+          }
+          if (t.length < 60 && !buffer) {
+            paragraphs.push(t);
+          } else if (t.length < 60 && buffer) {
+            paragraphs.push(buffer.trim());
+            buffer = "";
+            paragraphs.push(t);
+          } else {
+            buffer += (buffer ? " " : "") + t;
+          }
+        }
+        if (buffer) paragraphs.push(buffer.trim());
+
+        // 6. Dedup — bỏ đoạn trùng lặp (so sánh 80 ký tự đầu)
+        const seen = new Set();
+        const deduped = paragraphs.filter((p) => {
+          const key = p.substring(0, 80);
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+
+        return deduped.join("\n\n").trim();
+      }
+
+      // ── Extract text từ HTML ─────────────────────────────────────────────────
       function extractText(html, maxChars) {
         try {
           const parser = new DOMParser();
           const doc = parser.parseFromString(html, "text/html");
 
-          // Remove noise elements
           const REMOVE = [
             "script", "style", "nav", "header", "footer", "aside",
             "iframe", "noscript", ".ads", "#ads", ".cookie", ".popup",
@@ -117,7 +205,6 @@ Licensed under the Apache License, Version 2.0
             try { doc.querySelectorAll(sel).forEach((el) => el.remove()); } catch (_) {}
           });
 
-          // Try semantic content containers first
           const MAIN_SELECTORS = [
             "article", "main", "[role='main']",
             ".content", "#content", ".post", ".article", ".entry",
@@ -134,12 +221,10 @@ Licensed under the Apache License, Version 2.0
             } catch (_) {}
           }
 
-          // Fallback to full body
           if (text.length < 300) {
             text = (doc.body?.innerText || doc.body?.textContent || "").trim();
           }
 
-          // Normalize whitespace
           text = text
             .replace(/\t/g, " ")
             .replace(/[ ]{2,}/g, " ")
@@ -165,11 +250,13 @@ Licensed under the Apache License, Version 2.0
           }
 
           const query = jsonData.query.trim();
-          const num = jsonData.num ? parseInt(jsonData.num, 10) : 5;
+          const num = 2;
           const lang = jsonData.lang || "vi";
-          const maxCharsPerPage = 2000;
+          const maxCharsPerPage = 4000;
 
-          // Step 1: Google Custom Search (no CORS)
+          const t0 = Date.now();
+
+          // Step 1: Google CSE search
           const { items: searchResults, totalResults } = await googleSearch(query, num, lang);
 
           if (searchResults.length === 0) {
@@ -178,13 +265,17 @@ Licensed under the Apache License, Version 2.0
             });
           }
 
-          // Step 2: Fetch page content in parallel (with proxy fallback)
-          const contentPromises = searchResults.map((r) =>
-            fetchPageContent(r.url, maxCharsPerPage)
+          // Step 2: Fetch toàn bộ nội dung 2 trang song song
+          console.log(`[google-search] 📄 Bắt đầu fetch nội dung ${searchResults.length} trang song song...`);
+          const contentPromises = searchResults.map((r, i) =>
+            fetchPageContent(r.url, maxCharsPerPage, i + 1)
           );
           const pageContents = await Promise.all(contentPromises);
 
-          // Step 3: Build structured output for LLM
+          const fetchedCount = pageContents.filter(Boolean).length;
+          console.log(`[google-search] 📊 Tổng kết: ${fetchedCount}/${searchResults.length} trang fetch thành công | Thời gian: ${Date.now() - t0}ms`);
+
+          // Step 3: Build output
           let output = `Kết quả tìm kiếm web cho: "${query}"\n`;
           output += `Tìm thấy khoảng ${parseInt(totalResults).toLocaleString()} kết quả. Nội dung ${searchResults.length} trang đầu:\n\n`;
           output += "=".repeat(60) + "\n\n";
@@ -198,21 +289,21 @@ Licensed under the Apache License, Version 2.0
             if (content) {
               output += `\nNỘI DUNG:\n${content}\n`;
             } else {
-              // Fallback to snippet when page fetch failed
               output += `\nTÓM TẮT (không thể tải trang): ${r.snippet}\n`;
             }
             output += "\n" + "-".repeat(60) + "\n\n";
           }
 
-          // Cap total output to avoid overflowing context window
           const TOTAL_MAX = 12000;
           if (output.length > TOTAL_MAX) {
             output = output.substring(0, TOTAL_MAX) + "\n\n... [ĐÃ GIỚI HẠN — đạt giới hạn ngữ cảnh]";
           }
 
+          console.log(`[google-search] 🏁 Hoàn tất — output ${output.length} ký tự gửi cho LLM`);
+
           return JSON.stringify({ result: output });
         } catch (e) {
-          console.error("Google Search error:", e);
+          console.error("[google-search] ❌ Lỗi nghiêm trọng:", e);
           return JSON.stringify({ error: `Google Search thất bại: ${e.message}` });
         }
       };
