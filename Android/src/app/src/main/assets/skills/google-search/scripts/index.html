@@ -74,17 +74,11 @@ Licensed under the Apache License, Version 2.0
             }
           }
 
-          // Snippets từ organic results
-          const organic = serpData.organic_results || [];
-          if (organic.length > 0) {
-            const snippetLines = organic
-              .filter((r) => r.snippet)
-              .map((r, i) => `[${i + 1}] ${r.title}\n    ${r.snippet}\n    URL: ${r.link}`)
-              .join("\n\n");
-            if (snippetLines) {
-              console.log(`[google-search] ✅ ${organic.length} organic results`);
-              sections.push(`--- KẾT QUẢ TÌM KIẾM ---\n${snippetLines}`);
-            }
+          // Snippets từ organic results — chỉ lấy 1 cái đầu tiên
+          const firstOrganic = (serpData.organic_results || []).find((r) => r.snippet);
+          if (firstOrganic) {
+            console.log(`[google-search] ✅ Snippet: ${firstOrganic.title}`);
+            sections.push(`--- KẾT QUẢ TÌM KIẾM ---\n${firstOrganic.title}\n${firstOrganic.snippet}\nURL: ${firstOrganic.link}`);
           }
 
           if (sections.length === 0) {
