@@ -38,11 +38,14 @@ class StreamingChunkAccumulator(private val minWords: Int = 10) {
     /**
      * Flush toàn bộ buffer còn lại khi LLM done.
      * Trả về chunk cuối (có thể < MIN_WORDS).
+     * Trả về null nếu không còn từ có nghĩa nào.
      */
     fun flush(): String? {
         val remaining = buffer.toString().trim()
         buffer.clear()
         if (remaining.isEmpty()) return null
+        // Bỏ qua nếu không có từ nào có nghĩa (chỉ toàn dấu câu)
+        if (wordCount(remaining) == 0) return null
         val result = ensureTerminalDot(remaining)
         Log.i(TAG, "✂ Chunk #${chunkCounter++} flush: \"$result\" (${wordCount(result)} từ)")
         return result
@@ -54,6 +57,7 @@ class StreamingChunkAccumulator(private val minWords: Int = 10) {
      * Chuẩn hóa dấu ngắt/kết câu trong partial text:
      *  : ;  → ,
      *  ? !  → .
+     * Loại bỏ ký tự không phải chữ, số, khoảng trắng, dấu , hoặc . (emoji, ký hiệu đặc biệt...)
      * Sau đó chuẩn hóa spacing xung quanh dấu câu:
      *  - Xóa space TRƯỚC dấu . hoặc ,
      *  - Đảm bảo có đúng 1 space SAU dấu . hoặc , (nếu còn ký tự phía sau)
@@ -61,10 +65,12 @@ class StreamingChunkAccumulator(private val minWords: Int = 10) {
     private fun normalizePunctuation(text: String): String {
         val sb = StringBuilder(text.length)
         for (ch in text) {
-            when (ch) {
-                ':', ';' -> sb.append(',')
-                '?', '!' -> sb.append('.')
-                else     -> sb.append(ch)
+            when {
+                ch == ':' || ch == ';'         -> sb.append(',')
+                ch == '?' || ch == '!'         -> sb.append('.')
+                ch == '.' || ch == ','         -> sb.append(ch)
+                ch.isLetterOrDigit() || ch == ' ' || ch == '\n' || ch == '\r' -> sb.append(ch)
+                // bỏ qua mọi ký tự còn lại (emoji, ký hiệu đặc biệt, ...)
             }
         }
         // Xóa space(s) ngay TRƯỚC dấu . hoặc ,
