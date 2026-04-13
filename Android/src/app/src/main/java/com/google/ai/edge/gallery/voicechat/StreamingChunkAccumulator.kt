@@ -69,7 +69,8 @@ class StreamingChunkAccumulator(private val minWords: Int = 10) {
                 ch == ':' || ch == ';'         -> sb.append(',')
                 ch == '?' || ch == '!'         -> sb.append('.')
                 ch == '.' || ch == ','         -> sb.append(ch)
-                ch.isLetterOrDigit() || ch == ' ' || ch == '\n' || ch == '\r' -> sb.append(ch)
+                ch.isLetterOrDigit() || ch == ' ' -> sb.append(ch)
+                ch == '\n' || ch == '\r'           -> sb.append('.')
                 // Ký tự phân tách → thay bằng space để tránh 2 từ dính nhau
                 ch == '/' || ch == '-' || ch == '_' || ch == '(' || ch == ')' ||
                 ch == '[' || ch == ']' || ch == '"' || ch == '\'' -> sb.append(' ')
