@@ -48,6 +48,7 @@ import com.google.ai.edge.gallery.ui.theme.emptyStateContent
 import com.google.ai.edge.gallery.ui.theme.emptyStateTitle
 import com.google.ai.edge.litertlm.Contents
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
