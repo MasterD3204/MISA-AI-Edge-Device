@@ -55,30 +55,43 @@ Licensed under the Apache License, Version 2.0
 
           // AI Overview
           const ao = serpData.ai_overview;
+          console.log(`[google-search] ai_overview field: ${ao ? `CÓ (type=${typeof ao}, keys=${typeof ao === "object" ? Object.keys(ao).join(",") : "n/a"})` : "KHÔNG CÓ"}`);
           if (ao) {
+            console.log(`[google-search] ai_overview raw (500 ký tự đầu): ${JSON.stringify(ao).substring(0, 500)}`);
             let aiText = "";
             if (typeof ao === "string") {
               aiText = ao.trim();
+              console.log(`[google-search] ai_overview parse: dạng string`);
             } else if (ao.text && typeof ao.text === "string") {
               aiText = ao.text.trim();
+              console.log(`[google-search] ai_overview parse: dạng object.text`);
             } else if (Array.isArray(ao.blocks)) {
               aiText = ao.blocks
                 .map((b) => (typeof b === "string" ? b : b.snippet || b.text || ""))
                 .filter(Boolean)
                 .join(" ")
                 .trim();
+              console.log(`[google-search] ai_overview parse: dạng blocks (${ao.blocks.length} blocks)`);
+            } else {
+              console.log(`[google-search] ⚠️ ai_overview có nhưng không parse được — không khớp format nào`);
             }
             if (aiText) {
-              console.log(`[google-search] ✅ AI Overview (${aiText.length} ký tự)`);
+              console.log(`[google-search] ✅ AI Overview đã parse (${aiText.length} ký tự) → SẼ truyền vào LLM`);
               sections.push(`--- AI OVERVIEW ---\n${aiText}`);
+            } else {
+              console.log(`[google-search] ❌ AI Overview parse ra rỗng → KHÔNG truyền vào LLM`);
             }
+          } else {
+            console.log(`[google-search] ❌ Không có AI Overview → KHÔNG truyền vào LLM`);
           }
 
-          // Snippets từ organic results — chỉ lấy 1 cái đầu tiên
+          // Snippet — chỉ lấy 1 cái đầu tiên
           const firstOrganic = (serpData.organic_results || []).find((r) => r.snippet);
           if (firstOrganic) {
-            console.log(`[google-search] ✅ Snippet: ${firstOrganic.title}`);
+            console.log(`[google-search] ✅ Snippet: "${firstOrganic.title}" → SẼ truyền vào LLM`);
             sections.push(`--- KẾT QUẢ TÌM KIẾM ---\n${firstOrganic.title}\n${firstOrganic.snippet}\nURL: ${firstOrganic.link}`);
+          } else {
+            console.log(`[google-search] ❌ Không có snippet → KHÔNG truyền vào LLM`);
           }
 
           if (sections.length === 0) {
