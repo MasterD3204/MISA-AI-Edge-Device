@@ -40,6 +40,9 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.webkit.WebViewAssetLoader
 import com.google.ai.edge.gallery.common.LOCAL_URL_BASE
 import java.io.File
+import java.io.IOException
+import java.net.HttpURLConnection
+import java.net.URL
 
 private const val TAG = "AGGalleryWebView"
 private val iframeWrapper =
@@ -73,10 +76,56 @@ open class BaseGalleryWebViewClient(private val context: Context) : WebViewClien
     view: WebView?,
     request: WebResourceRequest?,
   ): WebResourceResponse? {
-    if (request?.url != null && request.url.toString().startsWith(LOCAL_URL_BASE)) {
-      // Returns 404 if file not exist for imported skills.
-      if (!request.url.toString().startsWith("$LOCAL_URL_BASE/assets/")) {
-        val path = request.url.path ?: ""
+    val url = request?.url?.toString() ?: return super.shouldInterceptRequest(view, request)
+
+    // Proxy external HTTPS requests qua Android native HTTP để bypass CORS.
+    // WebView chạy từ appassets.androidplatform.net bị block bởi các server không whitelist origin đó.
+    if (url.startsWith("https://") && !url.startsWith(LOCAL_URL_BASE)) {
+      return try {
+        Log.d(TAG, "Native proxy: $url")
+        val connection = URL(url).openConnection() as HttpURLConnection
+        connection.requestMethod = request.method ?: "GET"
+        // Forward headers từ WebView (bỏ qua Origin để tránh bị block)
+        request.requestHeaders?.forEach { (key, value) ->
+          if (!key.equals("Origin", ignoreCase = true) &&
+            !key.equals("Referer", ignoreCase = true)
+          ) {
+            connection.setRequestProperty(key, value)
+          }
+        }
+        connection.connectTimeout = 15000
+        connection.readTimeout = 15000
+        connection.instanceFollowRedirects = true
+
+        val responseCode = connection.responseCode
+        val contentType = connection.contentType ?: "application/octet-stream"
+        val mimeType = contentType.substringBefore(";").trim()
+        val encoding = contentType.substringAfter("charset=", "UTF-8").trim()
+
+        val inputStream = if (responseCode in 200..299) {
+          connection.inputStream
+        } else {
+          connection.errorStream ?: connection.inputStream
+        }
+
+        // Tambahkan CORS headers agar JS di WebView bisa membaca response
+        val corsHeaders = mapOf(
+          "Access-Control-Allow-Origin" to "*",
+          "Access-Control-Allow-Methods" to "GET, POST, OPTIONS",
+          "Access-Control-Allow-Headers" to "*",
+        )
+
+        WebResourceResponse(mimeType, encoding, responseCode, "OK", corsHeaders, inputStream)
+      } catch (e: IOException) {
+        Log.e(TAG, "Native proxy error for $url: ${e.message}")
+        null
+      }
+    }
+
+    // Local asset loading (existing logic)
+    if (url.startsWith(LOCAL_URL_BASE)) {
+      if (!url.startsWith("$LOCAL_URL_BASE/assets/")) {
+        val path = request.url?.path ?: ""
         val localFile = File(context.filesDir, path)
         if (!localFile.exists() || localFile.isDirectory) {
           return WebResourceResponse("text/plain", "UTF-8", null)
@@ -84,6 +133,7 @@ open class BaseGalleryWebViewClient(private val context: Context) : WebViewClien
       }
       return localFileAssetsLoader.shouldInterceptRequest(request.url)
     }
+
     return super.shouldInterceptRequest(view, request)
   }
 }
