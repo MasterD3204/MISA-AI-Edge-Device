@@ -51,20 +51,27 @@ class StreamingChunkAccumulator(private val minWords: Int = 7) {
     // ── Private ──────────────────────────────────────────────────────────────
 
     /**
-     * Chuẩn hóa dấu ngắt/kết câu trong partial text đến:
+     * Chuẩn hóa dấu ngắt/kết câu trong partial text:
      *  : ;  → ,
      *  ? !  → .
+     * Sau đó chuẩn hóa spacing xung quanh dấu câu:
+     *  - Xóa space TRƯỚC dấu . hoặc ,
+     *  - Đảm bảo có đúng 1 space SAU dấu . hoặc , (nếu còn ký tự phía sau)
      */
     private fun normalizePunctuation(text: String): String {
         val sb = StringBuilder(text.length)
         for (ch in text) {
             when (ch) {
-                ':', ';'       -> sb.append(',')
-                '?', '!'       -> sb.append('.')
-                else           -> sb.append(ch)
+                ':', ';' -> sb.append(',')
+                '?', '!' -> sb.append('.')
+                else     -> sb.append(ch)
             }
         }
-        return sb.toString()
+        // Xóa space(s) ngay TRƯỚC dấu . hoặc ,
+        val noSpaceBefore = sb.toString().replace(Regex("""\s+([.,])"""), "$1")
+        // Đảm bảo có đúng 1 space SAU dấu . hoặc , (khi phía sau là ký tự không phải space)
+        val spacedAfter = noSpaceBefore.replace(Regex("""([.,])(?!\s|$)"""), "$1 ")
+        return spacedAfter
     }
 
     /**
