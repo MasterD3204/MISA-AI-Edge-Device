@@ -105,6 +105,19 @@ class StreamingChunkAccumulator(private val minWords: Int = 7) {
             buffer.insert(0, "$carry ")
         }
 
+        // Nếu buffer còn lại (chưa có dấu cắt) < minWords từ
+        // VÀ đã có ít nhất 1 chunk sẵn sàng → ghép luôn vào chunk cuối, clear buffer.
+        val tail = buffer.toString().trim()
+        if (tail.isNotEmpty() && wordCount(tail) < minWords && result.isNotEmpty()) {
+            val lastChunk = result.removeLast()
+            // Đổi dấu . cuối chunk trước thành , để nối mượt
+            val lastWithComma = replaceTerminalDotWithComma(lastChunk)
+            val merged = ensureTerminalDot("$lastWithComma $tail")
+            Log.d(TAG, "   ⤵ Tail ngắn (${wordCount(tail)} từ < $minWords), ghép vào chunk trước: \"$merged\"")
+            result.add(merged)
+            buffer.clear()
+        }
+
         return result
     }
 
@@ -125,9 +138,10 @@ class StreamingChunkAccumulator(private val minWords: Int = 7) {
         return null
     }
 
-    /** Đếm số từ (tách bởi khoảng trắng). */
+    /** Đếm số từ, bỏ qua dấu chấm và dấu phẩy dính vào từ. */
     private fun wordCount(text: String): Int =
-        text.trim().split(Regex("\\s+")).count { it.isNotEmpty() }
+        text.trim().split(Regex("\\s+"))
+            .count { it.replace(Regex("[.,]+"), "").isNotEmpty() }
 
     /**
      * Nếu dấu cuối cùng là . → đổi thành ,.
