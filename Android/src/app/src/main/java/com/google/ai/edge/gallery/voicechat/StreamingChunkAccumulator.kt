@@ -13,7 +13,7 @@ import android.util.Log
  *   Nếu dấu cuối chunk ngắn là . → đổi thành , rồi mới ghép.
  * - Chunk đủ dài → normalize dấu cuối thành .
  */
-class StreamingChunkAccumulator(private val minWords: Int = 7) {
+class StreamingChunkAccumulator(private val minWords: Int = 10) {
 
     companion object {
         private const val TAG = "ChunkAccumulator"
@@ -116,7 +116,7 @@ class StreamingChunkAccumulator(private val minWords: Int = 7) {
         // VÀ đã có ít nhất 1 chunk sẵn sàng → ghép luôn vào chunk cuối, clear buffer.
         val tail = buffer.toString().trim()
         if (tail.isNotEmpty() && wordCount(tail) < minWords && result.isNotEmpty()) {
-            val lastChunk = result.removeLast()
+            val lastChunk = result.removeAt(result.lastIndex)
             // Đổi dấu . cuối chunk trước thành , để nối mượt
             val lastWithComma = replaceTerminalDotWithComma(lastChunk)
             val merged = ensureTerminalDot("$lastWithComma $tail")
