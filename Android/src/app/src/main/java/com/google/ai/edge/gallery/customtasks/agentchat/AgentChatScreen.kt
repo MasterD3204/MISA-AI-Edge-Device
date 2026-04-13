@@ -87,6 +87,9 @@ import com.google.ai.edge.gallery.ui.common.chat.ChatMessageCollapsableProgressP
 import com.google.ai.edge.gallery.ui.common.chat.ChatMessageImage
 import com.google.ai.edge.gallery.ui.common.chat.ChatMessageInfo
 import com.google.ai.edge.gallery.ui.common.chat.ChatMessageText
+import com.google.ai.edge.gallery.ui.common.chat.ChatSide
+import com.google.ai.edge.gallery.ui.common.chat.ChatVoiceBar
+import com.google.ai.edge.gallery.ui.common.chat.rememberPiperTtsEngine
 import com.google.ai.edge.gallery.ui.common.chat.ChatMessageType
 import com.google.ai.edge.gallery.ui.common.chat.ChatMessageWebView
 import com.google.ai.edge.gallery.ui.common.chat.ChatSide
@@ -120,6 +123,10 @@ fun AgentChatScreen(
   val context = LocalContext.current
   agentTools.context = context
   agentTools.skillManagerViewModel = skillManagerViewModel
+
+  val ttsEngine = rememberPiperTtsEngine(context)
+  var ttsEnabled by remember { mutableStateOf(false) }
+  val uiState by viewModel.uiState.collectAsState()
   val density = LocalDensity.current
   val windowInfo = LocalWindowInfo.current
   val screenWidthDp = remember { with(density) { windowInfo.containerSize.width.toDp() } }
@@ -185,6 +192,18 @@ fun AgentChatScreen(
       }
 
       updateProgressPanel(viewModel = viewModel, model = model, agentTools = agentTools)
+
+      // Đọc phản hồi AI nếu TTS được bật
+      if (ttsEnabled && ttsEngine != null) {
+        val messages = uiState.messagesByModel[model.name] ?: return@LlmChatScreen
+        val lastAiText = messages.lastOrNull {
+          it is ChatMessageText && it.side == ChatSide.AGENT
+        } as? ChatMessageText
+        lastAiText?.content?.takeIf { it.isNotBlank() }?.let { text ->
+          ttsEngine.resetStreaming()
+          ttsEngine.speak(text)
+        }
+      }
     },
     onResetSessionClickedOverride = { task, model ->
       resetSessionWithCurrentSkills(
@@ -436,6 +455,22 @@ fun AgentChatScreen(
           }
         }
       }
+
+      // Thanh TTS/STT
+      ChatVoiceBar(
+        ttsEnabled = ttsEnabled,
+        onTtsToggle = { enabled ->
+          ttsEnabled = enabled
+          if (!enabled) ttsEngine?.stop()
+        },
+        onSpeechResult = { text ->
+          sendMessageTrigger = SendMessageTrigger(
+            model = model,
+            messages = listOf(ChatMessageText(content = text, side = ChatSide.USER)),
+          )
+        },
+        llmInProgress = uiState.inProgress,
+      )
     },
     sendMessageTrigger = sendMessageTrigger,
   )

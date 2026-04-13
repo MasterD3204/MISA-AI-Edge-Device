@@ -29,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -40,9 +41,20 @@ import com.google.ai.edge.gallery.data.Category
 import com.google.ai.edge.gallery.data.Model
 import com.google.ai.edge.gallery.data.Task
 import com.google.ai.edge.gallery.runtime.runtimeHelper
+import com.google.ai.edge.gallery.ui.common.chat.ChatMessageText
+import com.google.ai.edge.gallery.ui.common.chat.ChatSide
+import com.google.ai.edge.gallery.ui.common.chat.ChatVoiceBar
+import com.google.ai.edge.gallery.ui.common.chat.SendMessageTrigger
+import com.google.ai.edge.gallery.ui.common.chat.rememberPiperTtsEngine
 import com.google.ai.edge.gallery.ui.theme.emptyStateContent
 import com.google.ai.edge.gallery.ui.theme.emptyStateTitle
 import com.google.ai.edge.litertlm.Contents
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.hilt.navigation.compose.hiltViewModel
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -118,15 +130,53 @@ class LlmChatTask @Inject constructor() : CustomTask {
   @Composable
   override fun MainScreen(data: Any) {
     val myData = data as CustomTaskDataForBuiltinTask
+    val context = LocalContext.current
+    val viewModel: LlmChatViewModel = hiltViewModel()
+    val uiState by viewModel.uiState.collectAsState()
+
+    val ttsEngine = rememberPiperTtsEngine(context)
+    var ttsEnabled by remember { mutableStateOf(false) }
+    var sendMessageTrigger by remember { mutableStateOf<SendMessageTrigger?>(null) }
+
+    // Lấy model hiện tại để đọc messages
+    val selectedModel = myData.modelManagerViewModel.uiState.collectAsState().value.selectedModel
+
     LlmChatScreen(
+      viewModel = viewModel,
       modelManagerViewModel = myData.modelManagerViewModel,
       navigateUp = myData.onNavUp,
-      // Expose image and audio pickers in the input UI.
       showImagePicker = true,
       showAudioPicker = true,
-      // onResetSessionClickedOverride = null (default): ChatViewWrapper will call
-      // viewModel.resetSession(supportImage = showImagePicker, supportAudio = showAudioPicker)
-      // which means supportImage=true, supportAudio=true — keeps full multimodal support.
+      sendMessageTrigger = sendMessageTrigger,
+      onGenerateResponseDone = { model ->
+        // Đọc phản hồi AI nếu TTS được bật
+        if (ttsEnabled && ttsEngine != null) {
+          val messages = uiState.messagesByModel[model.name] ?: return@LlmChatScreen
+          val lastAiText = messages.lastOrNull {
+            it is ChatMessageText && it.side == ChatSide.AGENT
+          } as? ChatMessageText
+          lastAiText?.content?.takeIf { it.isNotBlank() }?.let { text ->
+            ttsEngine.resetStreaming()
+            ttsEngine.speak(text)
+          }
+        }
+      },
+      composableBelowMessageList = { model ->
+        ChatVoiceBar(
+          ttsEnabled = ttsEnabled,
+          onTtsToggle = { enabled ->
+            ttsEnabled = enabled
+            if (!enabled) ttsEngine?.stop()
+          },
+          onSpeechResult = { text ->
+            sendMessageTrigger = SendMessageTrigger(
+              model = model,
+              messages = listOf(ChatMessageText(content = text, side = ChatSide.USER)),
+            )
+          },
+          llmInProgress = uiState.inProgress,
+        )
+      },
       emptyStateComposable = {
         Box(modifier = Modifier.fillMaxSize()) {
           Column(
