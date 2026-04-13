@@ -13,20 +13,17 @@ Licensed under the Apache License, Version 2.0
     <script>
       const SERPAPI_KEY = "a932ba13ac049c5536132aa9827cb2dda660691112a05b047c940a3c322d9c13";
 
-      // ── SerpAPI search ───────────────────────────────────────────────────────
       async function serpSearch(query, lang) {
         console.log(`[google-search] 🔍 Query: "${query}" | lang=${lang}`);
-
         const params = new URLSearchParams({
           q: query,
           api_key: SERPAPI_KEY,
           engine: "google",
           hl: lang,
           gl: lang === "vi" ? "vn" : "us",
-          num: "2",
+          num: "5",
           output: "json",
         });
-
         const res = await fetch(
           `https://serpapi.com/search?${params.toString()}`,
           { signal: AbortSignal.timeout(12000) }
@@ -38,194 +35,6 @@ Licensed under the Apache License, Version 2.0
         return await res.json();
       }
 
-      // ── Extract AI Overview ──────────────────────────────────────────────────
-      function extractAiOverview(data) {
-        const ao = data.ai_overview;
-        if (!ao) return null;
-
-        let text = "";
-        if (typeof ao === "string") {
-          text = ao.trim();
-        } else if (ao.text && typeof ao.text === "string") {
-          text = ao.text.trim();
-        } else if (Array.isArray(ao.blocks)) {
-          text = ao.blocks
-            .map((b) => (typeof b === "string" ? b : b.snippet || ""))
-            .filter(Boolean)
-            .join(" ");
-        }
-
-        // Fallback: answer_box
-        if (!text && data.answer_box) {
-          const ab = data.answer_box;
-          text = ab.answer || ab.snippet || ab.result || "";
-        }
-
-        return text.trim() || null;
-      }
-
-      // ── Extract Knowledge Graph ──────────────────────────────────────────────
-      function extractKnowledgeGraph(data) {
-        const kg = data.knowledge_graph;
-        if (!kg) return null;
-        const parts = [];
-        if (kg.title) parts.push(kg.title);
-        if (kg.type) parts.push(`(${kg.type})`);
-        if (kg.description) parts.push(kg.description);
-        return parts.length > 0 ? parts.join(" ") : null;
-      }
-
-      // ── Format text cho LLM dễ đọc ──────────────────────────────────────────
-      function formatTextForLLM(rawText) {
-        if (!rawText) return null;
-
-        let text = rawText
-          .replace(/\r\n/g, "\n")
-          .replace(/\r/g, "\n");
-
-        // Bỏ dòng rác
-        text = text
-          .split("\n")
-          .filter((line) => {
-            const t = line.trim();
-            if (t.length < 3) return false;
-            if (/^[-=_*|#]{3,}$/.test(t)) return false;
-            if (/^[•·▪▸►→\-]\s*$/.test(t)) return false;
-            return true;
-          })
-          .join("\n");
-
-        // Gộp blank lines
-        text = text.replace(/\n{3,}/g, "\n\n");
-
-        // Xóa ký tự rác
-        text = text
-          .replace(/\[object Object\]/g, "")
-          .replace(/\bundefined\b/g, "")
-          .replace(/\t/g, " ")
-          .replace(/[ ]{3,}/g, "  ");
-
-        // Tách thành paragraph
-        const lines = text.split("\n");
-        const paragraphs = [];
-        let buffer = "";
-
-        for (const line of lines) {
-          const t = line.trim();
-          if (!t) {
-            if (buffer) { paragraphs.push(buffer.trim()); buffer = ""; }
-            continue;
-          }
-          if (t.length < 60 && !buffer) {
-            paragraphs.push(t);
-          } else if (t.length < 60 && buffer) {
-            paragraphs.push(buffer.trim()); buffer = "";
-            paragraphs.push(t);
-          } else {
-            buffer += (buffer ? " " : "") + t;
-          }
-        }
-        if (buffer) paragraphs.push(buffer.trim());
-
-        // Dedup
-        const seen = new Set();
-        return paragraphs
-          .filter((p) => {
-            const key = p.substring(0, 80);
-            if (seen.has(key)) return false;
-            seen.add(key);
-            return true;
-          })
-          .join("\n\n")
-          .trim();
-      }
-
-      // ── Fetch full page content qua SerpAPI HTML endpoint ───────────────────
-      // SerpAPI hỗ trợ CORS nên fetch trực tiếp được, không cần proxy
-      async function fetchPageContent(url, maxChars, sourceIndex) {
-        const label = `[Nguồn ${sourceIndex}]`;
-        console.log(`[google-search] ${label} Đang fetch nội dung: ${url}`);
-
-        // Dùng SerpAPI /html để bypass CORS khi fetch trang web trực tiếp
-        // (SerpAPI không cung cấp endpoint này — dùng corsproxy.io trước, fallback allorigins)
-        const PROXIES = [
-          { name: "corsproxy.io",   build: (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,              json: false },
-          { name: "allorigins.win", build: (u) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,      json: true  },
-          { name: "codetabs.com",   build: (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`, json: false },
-        ];
-
-        for (const proxy of PROXIES) {
-          try {
-            const t0 = Date.now();
-            const res = await fetch(proxy.build(url), { signal: AbortSignal.timeout(8000) });
-            const elapsed = Date.now() - t0;
-
-            if (!res.ok) {
-              console.log(`[google-search] ${label} Proxy ${proxy.name} HTTP ${res.status} (${elapsed}ms) — thử proxy tiếp`);
-              continue;
-            }
-
-            let html = proxy.json ? (await res.json()).contents || "" : await res.text();
-            if (!html) {
-              console.log(`[google-search] ${label} Proxy ${proxy.name} rỗng (${elapsed}ms) — thử proxy tiếp`);
-              continue;
-            }
-
-            const rawText = extractTextFromHTML(html, maxChars);
-            const text = formatTextForLLM(rawText);
-            if (text && text.length > 150) {
-              console.log(`[google-search] ${label} ✅ Proxy ${proxy.name} OK (${elapsed}ms) — ${text.length} ký tự`);
-              console.log(`[google-search] ${label} ====== TOÀN BỘ NỘI DUNG TRANG ======\n${text}\n====== HẾT NỘI DUNG ${label} ======`);
-              return text;
-            }
-            console.log(`[google-search] ${label} Proxy ${proxy.name} nội dung quá ngắn (${text?.length ?? 0} ký tự) — thử proxy tiếp`);
-          } catch (e) {
-            console.log(`[google-search] ${label} Proxy ${proxy.name} lỗi: ${e.message} — thử proxy tiếp`);
-          }
-        }
-
-        console.log(`[google-search] ${label} ❌ Tất cả proxy thất bại — dùng snippet`);
-        return null;
-      }
-
-      // ── Extract text từ HTML ─────────────────────────────────────────────────
-      function extractTextFromHTML(html, maxChars) {
-        try {
-          const parser = new DOMParser();
-          const doc = parser.parseFromString(html, "text/html");
-
-          ["script","style","nav","header","footer","aside","iframe",
-           "noscript",".ads","#ads",".cookie",".popup",".banner",
-           ".sidebar",".menu",".navigation",".social",".share",
-           "[role='navigation']","[role='banner']"].forEach((sel) => {
-            try { doc.querySelectorAll(sel).forEach((el) => el.remove()); } catch (_) {}
-          });
-
-          let text = "";
-          for (const sel of ["article","main","[role='main']",".content","#content",
-                              ".post",".article",".entry",".post-content",".article-body"]) {
-            try {
-              const el = doc.querySelector(sel);
-              if (el) {
-                text = (el.innerText || el.textContent || "").trim();
-                if (text.length > 300) break;
-              }
-            } catch (_) {}
-          }
-
-          if (text.length < 300) {
-            text = (doc.body?.innerText || doc.body?.textContent || "").trim();
-          }
-
-          text = text.replace(/\t/g, " ").replace(/[ ]{2,}/g, " ").replace(/\n{3,}/g, "\n\n").trim();
-          if (text.length > maxChars) text = text.substring(0, maxChars) + "... [TRUNCATED]";
-          return text.length > 150 ? text : null;
-        } catch (_) {
-          return null;
-        }
-      }
-
-      // ── Main entry point ─────────────────────────────────────────────────────
       window["ai_edge_gallery_get_result"] = async (data, secret) => {
         try {
           const jsonData = JSON.parse(data);
@@ -235,95 +44,55 @@ Licensed under the Apache License, Version 2.0
 
           const query = jsonData.query.trim();
           const lang = (jsonData.lang || "vi").trim();
-          const maxCharsPerPage = 4000;
-          const t0 = Date.now();
 
-          // Step 1: SerpAPI search
           const serpData = await serpSearch(query, lang);
-
-          // Log các top-level keys để biết SerpAPI trả về những field nào
-          console.log(`[google-search] 📦 SerpAPI response keys: ${Object.keys(serpData).join(", ")}`);
-          if (serpData.ai_overview) {
-            console.log(`[google-search] ✅ ai_overview CÓ — type: ${typeof serpData.ai_overview}`);
-            console.log(`[google-search] ai_overview raw: ${JSON.stringify(serpData.ai_overview).substring(0, 500)}`);
-          } else {
-            console.log(`[google-search] ❌ ai_overview KHÔNG có trong response`);
-          }
-          if (serpData.answer_box) {
-            console.log(`[google-search] ✅ answer_box CÓ: ${JSON.stringify(serpData.answer_box).substring(0, 300)}`);
-          }
 
           if (serpData.error) {
             return JSON.stringify({ error: `SerpAPI: ${serpData.error}` });
           }
 
-          // Step 2: Extract AI Overview / Knowledge Graph
-          const aiOverview = extractAiOverview(serpData);
-          const knowledgeGraph = extractKnowledgeGraph(serpData);
+          const sections = [];
 
-          if (aiOverview) {
-            console.log(`[google-search] 🤖 AI Overview (${aiOverview.length} ký tự):\n${aiOverview}`);
-          }
-          if (knowledgeGraph) {
-            console.log(`[google-search] 📌 Knowledge Graph: ${knowledgeGraph}`);
+          // AI Overview
+          const ao = serpData.ai_overview;
+          if (ao) {
+            let aiText = "";
+            if (typeof ao === "string") {
+              aiText = ao.trim();
+            } else if (ao.text && typeof ao.text === "string") {
+              aiText = ao.text.trim();
+            } else if (Array.isArray(ao.blocks)) {
+              aiText = ao.blocks
+                .map((b) => (typeof b === "string" ? b : b.snippet || b.text || ""))
+                .filter(Boolean)
+                .join(" ")
+                .trim();
+            }
+            if (aiText) {
+              console.log(`[google-search] ✅ AI Overview (${aiText.length} ký tự)`);
+              sections.push(`--- AI OVERVIEW ---\n${aiText}`);
+            }
           }
 
-          // Step 3: Organic results (top 2)
-          const organic = (serpData.organic_results || []).slice(0, 2);
-          if (organic.length === 0 && !aiOverview) {
+          // Snippets từ organic results
+          const organic = serpData.organic_results || [];
+          if (organic.length > 0) {
+            const snippetLines = organic
+              .filter((r) => r.snippet)
+              .map((r, i) => `[${i + 1}] ${r.title}\n    ${r.snippet}\n    URL: ${r.link}`)
+              .join("\n\n");
+            if (snippetLines) {
+              console.log(`[google-search] ✅ ${organic.length} organic results`);
+              sections.push(`--- KẾT QUẢ TÌM KIẾM ---\n${snippetLines}`);
+            }
+          }
+
+          if (sections.length === 0) {
             return JSON.stringify({ result: `Không tìm thấy kết quả nào cho "${query}".` });
           }
 
-          console.log(`[google-search] ✅ SerpAPI trả về ${organic.length} kết quả organic:`);
-          organic.forEach((r, i) => {
-            console.log(`  [${i + 1}] ${r.title}`);
-            console.log(`       URL: ${r.link}`);
-            if (r.snippet) console.log(`       Snippet: ${r.snippet.substring(0, 120)}`);
-          });
-
-          // Step 4: Fetch full page content song song
-          console.log(`[google-search] 📄 Fetch nội dung ${organic.length} trang song song...`);
-          const pageContents = await Promise.all(
-            organic.map((r, i) => fetchPageContent(r.link, maxCharsPerPage, i + 1))
-          );
-
-          const fetchedCount = pageContents.filter(Boolean).length;
-          console.log(`[google-search] 📊 Tổng kết: ${fetchedCount}/${organic.length} trang fetch thành công | ${Date.now() - t0}ms`);
-
-          // Step 5: Build output cho LLM
-          const sections = [];
-
-          if (aiOverview) {
-            sections.push(`--- AI OVERVIEW (Google) ---\n${aiOverview}`);
-          }
-          if (knowledgeGraph) {
-            sections.push(`--- KNOWLEDGE GRAPH ---\n${knowledgeGraph}`);
-          }
-
-          for (let i = 0; i < organic.length; i++) {
-            const r = organic[i];
-            const content = pageContents[i];
-            let block = `--- NGUỒN ${i + 1}: ${r.title} ---\n`;
-            block += `URL: ${r.link}\n`;
-            if (r.date) block += `Ngày: ${r.date}\n`;
-            block += "\n";
-            if (content) {
-              block += content;
-            } else {
-              block += `[Không thể tải trang — snippet]: ${r.snippet || ""}`;
-            }
-            sections.push(block);
-          }
-
-          let output = `Kết quả tìm kiếm: "${query}"\n\n` + sections.join("\n\n");
-
-          const TOTAL_MAX = 12000;
-          if (output.length > TOTAL_MAX) {
-            output = output.substring(0, TOTAL_MAX) + "\n\n... [ĐÃ GIỚI HẠN]";
-          }
-
-          console.log(`[google-search] 🏁 Hoàn tất — ${output.length} ký tự`);
-          console.log(`[google-search] ====== TOÀN BỘ OUTPUT GỬI CHO LLM ======\n${output}\n====== HẾT OUTPUT ======`);
+          const output = `Kết quả tìm kiếm: "${query}"\n\n` + sections.join("\n\n");
+          console.log(`[google-search] 🏁 Output ${output.length} ký tự:\n${output}`);
 
           return JSON.stringify({ result: output });
         } catch (e) {
