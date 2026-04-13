@@ -161,7 +161,7 @@ class LlmChatTask @Inject constructor() : CustomTask {
           }
         }
       },
-      composableBelowMessageList = { model ->
+      extraInputRow = {
         ChatVoiceBar(
           ttsEnabled = ttsEnabled,
           onTtsToggle = { enabled ->
@@ -170,7 +170,7 @@ class LlmChatTask @Inject constructor() : CustomTask {
           },
           onSpeechResult = { text ->
             sendMessageTrigger = SendMessageTrigger(
-              model = model,
+              model = selectedModel,
               messages = listOf(ChatMessageText(content = text, side = ChatSide.USER)),
             )
           },

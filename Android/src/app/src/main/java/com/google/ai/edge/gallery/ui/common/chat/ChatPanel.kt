@@ -121,6 +121,7 @@ fun ChatPanel(
   showImagePicker: Boolean = false,
   showAudioPicker: Boolean = false,
   emptyStateComposable: @Composable (Model) -> Unit = {},
+  extraInputRow: @Composable () -> Unit = {},
 ) {
   val uiState by viewModel.uiState.collectAsState()
   val modelManagerUiState by modelManagerViewModel.uiState.collectAsState()
@@ -528,6 +529,8 @@ fun ChatPanel(
           }
         }
       }
+
+      extraInputRow()
 
       MessageInputText(
         task = task,

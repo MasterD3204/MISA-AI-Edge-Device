@@ -455,8 +455,8 @@ fun AgentChatScreen(
           }
         }
       }
-
-      // Thanh TTS/STT
+    },
+    extraInputRow = {
       ChatVoiceBar(
         ttsEnabled = ttsEnabled,
         onTtsToggle = { enabled ->
@@ -465,7 +465,7 @@ fun AgentChatScreen(
         },
         onSpeechResult = { text ->
           sendMessageTrigger = SendMessageTrigger(
-            model = model,
+            model = modelManagerViewModel.uiState.value.selectedModel,
             messages = listOf(ChatMessageText(content = text, side = ChatSide.USER)),
           )
         },
