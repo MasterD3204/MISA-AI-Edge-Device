@@ -30,9 +30,17 @@ Licensed under the Apache License, Version 2.0
         );
         if (!res.ok) {
           const errBody = await res.text();
-          throw new Error(`SerpAPI error ${res.status}: ${errBody.substring(0, 300)}`);
+          throw new Error(`SerpAPI error ${res.status}: ${errBody}`);
         }
         return await res.json();
+      }
+
+      // Log chuỗi dài theo từng chunk 1000 ký tự để logcat không cắt
+      function logFull(tag, text) {
+        const chunkSize = 1000;
+        for (let i = 0; i < text.length; i += chunkSize) {
+          console.log(`${tag} [${Math.floor(i/chunkSize)+1}] ${text.substring(i, i + chunkSize)}`);
+        }
       }
 
       window["ai_edge_gallery_get_result"] = async (data, secret) => {
@@ -51,53 +59,50 @@ Licensed under the Apache License, Version 2.0
             return JSON.stringify({ error: `SerpAPI: ${serpData.error}` });
           }
 
-          const sections = [];
-
-          // AI Overview
+          // Log TOÀN BỘ ai_overview raw để debug
           const ao = serpData.ai_overview;
-          console.log(`[google-search] ai_overview field: ${ao ? `CÓ (type=${typeof ao}, keys=${typeof ao === "object" ? Object.keys(ao).join(",") : "n/a"})` : "KHÔNG CÓ"}`);
+          console.log(`[google-search] ai_overview: ${ao ? "CÓ" : "KHÔNG CÓ"}`);
           if (ao) {
-            console.log(`[google-search] ai_overview raw (500 ký tự đầu): ${JSON.stringify(ao).substring(0, 500)}`);
-            let aiText = "";
+            console.log(`[google-search] ai_overview keys: ${Object.keys(ao).join(", ")}`);
+            logFull("[google-search] ai_overview RAW", JSON.stringify(ao));
+          }
+
+          // Parse: gom TẤT CẢ snippet từ text_blocks
+          let aiText = "";
+          if (ao) {
             if (typeof ao === "string") {
               aiText = ao.trim();
-              console.log(`[google-search] ai_overview parse: dạng string`);
             } else if (ao.text && typeof ao.text === "string") {
               aiText = ao.text.trim();
-              console.log(`[google-search] ai_overview parse: dạng object.text`);
             } else if (Array.isArray(ao.text_blocks)) {
               aiText = ao.text_blocks
                 .map((b) => b.snippet || b.text || "")
                 .filter(Boolean)
-                .join(" ")
+                .join("\n")
                 .trim();
-              console.log(`[google-search] ai_overview parse: dạng text_blocks (${ao.text_blocks.length} blocks)`);
+              console.log(`[google-search] text_blocks count: ${ao.text_blocks.length}`);
+              ao.text_blocks.forEach((b, i) => {
+                console.log(`[google-search] text_blocks[${i}] type=${b.type} snippet="${b.snippet || ""}"`);
+              });
             } else if (Array.isArray(ao.blocks)) {
               aiText = ao.blocks
                 .map((b) => (typeof b === "string" ? b : b.snippet || b.text || ""))
                 .filter(Boolean)
-                .join(" ")
+                .join("\n")
                 .trim();
-              console.log(`[google-search] ai_overview parse: dạng blocks (${ao.blocks.length} blocks)`);
-            } else {
-              console.log(`[google-search] ⚠️ ai_overview có nhưng không parse được — không khớp format nào`);
             }
-            if (aiText) {
-              console.log(`[google-search] ✅ AI Overview đã parse (${aiText.length} ký tự) → SẼ truyền vào LLM`);
-              sections.push(`--- AI OVERVIEW ---\n${aiText}`);
-            } else {
-              console.log(`[google-search] ❌ AI Overview parse ra rỗng → KHÔNG truyền vào LLM`);
-            }
-          } else {
-            console.log(`[google-search] ❌ Không có AI Overview → KHÔNG truyền vào LLM`);
           }
 
-          if (sections.length === 0) {
+          if (!aiText) {
+            console.log(`[google-search] ❌ Không parse được AI Overview`);
             return JSON.stringify({ result: `Không tìm thấy kết quả nào cho "${query}".` });
           }
 
-          const output = `Kết quả tìm kiếm: "${query}"\n\n` + sections.join("\n\n");
-          console.log(`[google-search] 🏁 Output ${output.length} ký tự:\n${output}`);
+          const output = `Kết quả tìm kiếm: "${query}"\n\n--- AI OVERVIEW ---\n${aiText}`;
+
+          // Log TOÀN BỘ output sẽ truyền vào LLM
+          console.log(`[google-search] ✅ Output ${output.length} ký tự — TOÀN BỘ NỘI DUNG TRUYỀN VÀO LLM:`);
+          logFull("[google-search] OUTPUT→LLM", output);
 
           return JSON.stringify({ result: output });
         } catch (e) {
