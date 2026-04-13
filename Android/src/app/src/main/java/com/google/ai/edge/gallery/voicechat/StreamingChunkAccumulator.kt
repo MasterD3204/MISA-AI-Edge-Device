@@ -80,8 +80,8 @@ class StreamingChunkAccumulator(private val minWords: Int = 10) {
         val noSpaceBefore = sb.toString().replace(Regex("""\s+([.,])"""), "$1")
         // Đảm bảo có đúng 1 space SAU dấu . hoặc , (khi phía sau là ký tự không phải space)
         val spacedAfter = noSpaceBefore.replace(Regex("""([.,])(?!\s|$)"""), "$1 ")
-        // Chuẩn hóa nhiều space liên tiếp thành 1
-        return spacedAfter.replace(Regex("""\s{2,}"""), " ").trim()
+        // Chuẩn hóa nhiều space liên tiếp thành 1 — KHÔNG trim() vì partial có thể bắt đầu/kết thúc bằng space
+        return spacedAfter.replace(Regex("""\s{2,}"""), " ")
     }
 
     /**
