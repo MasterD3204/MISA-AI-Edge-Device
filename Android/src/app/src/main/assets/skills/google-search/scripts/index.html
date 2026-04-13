@@ -14,11 +14,19 @@ Licensed under the Apache License, Version 2.0
       const GOOGLE_API_KEY = "AIzaSyD5ZuvFYdZxvioaP6OKFNtdAlEgnNehOCs";
       const GOOGLE_CSE_ID = "024969196858e485f";
 
-      // Fetch top search results from Google Custom Search
-      async function googleSearch(query, num, lang, apiKey, cx) {
+      // ── CORS-free proxy list (tried in order) ───────────────────────────────
+      // Each entry is a function: url → proxied fetch URL string
+      const PROXY_BUILDERS = [
+        (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
+        (url) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+        (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+      ];
+
+      // ── Fetch via Google Custom Search JSON API (no CORS issue) ─────────────
+      async function googleSearch(query, num, lang) {
         const params = new URLSearchParams({
-          key: apiKey,
-          cx: cx,
+          key: GOOGLE_API_KEY,
+          cx: GOOGLE_CSE_ID,
           q: query,
           num: String(Math.min(Math.max(num, 1), 10)),
         });
@@ -26,79 +34,129 @@ Licensed under the Apache License, Version 2.0
           params.set("lr", `lang_${lang}`);
           params.set("hl", lang);
         }
-        const res = await fetch(`https://www.googleapis.com/customsearch/v1?${params.toString()}`);
+        const res = await fetch(
+          `https://www.googleapis.com/customsearch/v1?${params.toString()}`,
+          { signal: AbortSignal.timeout(10000) }
+        );
         if (!res.ok) {
           const errBody = await res.text();
-          throw new Error(`Google API error ${res.status}: ${errBody}`);
+          throw new Error(`Google API error ${res.status}: ${errBody.substring(0, 300)}`);
         }
         const data = await res.json();
-        if (!data.items || data.items.length === 0) return [];
-        return data.items.map((item) => ({
+
+        // Extract AI Overview / answer box from CSE promotions or snippets
+        let aiOverview = null;
+        if (data.spelling?.correctedQuery) {
+          // Note spelling correction
+        }
+        // CSE can return "searchInformation" with total results count
+        const totalResults = data.searchInformation?.totalResults || "0";
+
+        if (!data.items || data.items.length === 0) {
+          return { items: [], totalResults, aiOverview };
+        }
+
+        const items = data.items.map((item) => ({
           title: item.title || "",
           url: item.link || "",
           snippet: item.snippet ? item.snippet.replace(/\n/g, " ").trim() : "",
+          // Rich snippet date if available
+          date: item.pagemap?.metatags?.[0]?.["article:published_time"]
+            || item.pagemap?.metatags?.[0]?.["og:updated_time"]
+            || "",
         }));
+
+        return { items, totalResults, aiOverview };
       }
 
-      // Fetch and extract readable text from a URL via allorigins proxy
+      // ── Fetch page content through CORS proxies with fallback ────────────────
       async function fetchPageContent(url, maxChars) {
-        try {
-          // Use allorigins to bypass CORS
-          const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-          const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(8000) });
-          if (!res.ok) return null;
-          const data = await res.json();
-          const html = data.contents;
-          if (!html) return null;
+        for (const buildProxy of PROXY_BUILDERS) {
+          try {
+            const proxyUrl = buildProxy(url);
+            const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(7000) });
+            if (!res.ok) continue;
 
-          // Parse HTML and extract text
+            let html = "";
+            const contentType = res.headers.get("content-type") || "";
+
+            if (contentType.includes("application/json")) {
+              // allorigins / codetabs return JSON with .contents field
+              const json = await res.json();
+              html = json.contents || json.data || "";
+            } else {
+              // corsproxy.io returns raw HTML directly
+              html = await res.text();
+            }
+
+            if (!html) continue;
+
+            const text = extractText(html, maxChars);
+            if (text && text.length > 150) return text;
+          } catch (_) {
+            // Try next proxy
+          }
+        }
+        return null; // All proxies failed
+      }
+
+      // ── Extract readable text from HTML ─────────────────────────────────────
+      function extractText(html, maxChars) {
+        try {
           const parser = new DOMParser();
           const doc = parser.parseFromString(html, "text/html");
 
-          // Remove unwanted elements
-          const removeSelectors = [
-            "script", "style", "nav", "header", "footer",
-            "aside", "iframe", "noscript", "ads", ".ads",
-            "#ads", ".cookie", ".popup", ".banner", ".sidebar",
-            ".menu", ".navigation", ".social", ".share",
+          // Remove noise elements
+          const REMOVE = [
+            "script", "style", "nav", "header", "footer", "aside",
+            "iframe", "noscript", ".ads", "#ads", ".cookie", ".popup",
+            ".banner", ".sidebar", ".menu", ".navigation", ".social",
+            ".share", "[role='navigation']", "[role='banner']",
           ];
-          removeSelectors.forEach((sel) => {
-            doc.querySelectorAll(sel).forEach((el) => el.remove());
+          REMOVE.forEach((sel) => {
+            try { doc.querySelectorAll(sel).forEach((el) => el.remove()); } catch (_) {}
           });
 
-          // Try to get main content first
-          const mainSelectors = ["article", "main", ".content", "#content", ".post", ".article", ".entry"];
-          let textContent = "";
-          for (const sel of mainSelectors) {
-            const el = doc.querySelector(sel);
-            if (el) {
-              textContent = el.innerText || el.textContent || "";
-              if (textContent.trim().length > 200) break;
-            }
+          // Try semantic content containers first
+          const MAIN_SELECTORS = [
+            "article", "main", "[role='main']",
+            ".content", "#content", ".post", ".article", ".entry",
+            ".post-content", ".article-body", ".story-body",
+          ];
+          let text = "";
+          for (const sel of MAIN_SELECTORS) {
+            try {
+              const el = doc.querySelector(sel);
+              if (el) {
+                text = (el.innerText || el.textContent || "").trim();
+                if (text.length > 300) break;
+              }
+            } catch (_) {}
           }
 
-          // Fallback to body
-          if (textContent.trim().length < 200) {
-            textContent = doc.body ? (doc.body.innerText || doc.body.textContent || "") : "";
+          // Fallback to full body
+          if (text.length < 300) {
+            text = (doc.body?.innerText || doc.body?.textContent || "").trim();
           }
 
-          // Clean up whitespace
-          textContent = textContent
+          // Normalize whitespace
+          text = text
             .replace(/\t/g, " ")
             .replace(/[ ]{2,}/g, " ")
             .replace(/\n{3,}/g, "\n\n")
             .trim();
 
-          if (textContent.length > maxChars) {
-            textContent = textContent.substring(0, maxChars) + "... [TRUNCATED]";
+          if (text.length > maxChars) {
+            text = text.substring(0, maxChars) + "... [TRUNCATED]";
           }
 
-          return textContent.length > 100 ? textContent : null;
-        } catch (e) {
+          return text.length > 150 ? text : null;
+        } catch (_) {
           return null;
         }
       }
 
+      // ── Main entry point ─────────────────────────────────────────────────────
       window["ai_edge_gallery_get_result"] = async (data, secret) => {
         try {
           const jsonData = JSON.parse(data);
@@ -108,49 +166,54 @@ Licensed under the Apache License, Version 2.0
 
           const query = jsonData.query.trim();
           const num = jsonData.num ? parseInt(jsonData.num, 10) : 5;
-          const lang = jsonData.lang || "en";
+          const lang = jsonData.lang || "vi";
           const maxCharsPerPage = 2000;
 
-          // Step 1: Get search results
-          const searchResults = await googleSearch(query, num, lang, GOOGLE_API_KEY, GOOGLE_CSE_ID);
+          // Step 1: Google Custom Search (no CORS)
+          const { items: searchResults, totalResults } = await googleSearch(query, num, lang);
 
           if (searchResults.length === 0) {
-            return JSON.stringify({ result: `No results found for "${query}". Try a different query.` });
+            return JSON.stringify({
+              result: `Không tìm thấy kết quả nào cho "${query}". Hãy thử truy vấn khác.`,
+            });
           }
 
-          // Step 2: Fetch content from each page in parallel
-          const contentPromises = searchResults.map((r) => fetchPageContent(r.url, maxCharsPerPage));
+          // Step 2: Fetch page content in parallel (with proxy fallback)
+          const contentPromises = searchResults.map((r) =>
+            fetchPageContent(r.url, maxCharsPerPage)
+          );
           const pageContents = await Promise.all(contentPromises);
 
-          // Step 3: Build output for LLM
-          let output = `Web search results for: "${query}"\n`;
-          output += `Found ${searchResults.length} sources. Full page content below:\n\n`;
+          // Step 3: Build structured output for LLM
+          let output = `Kết quả tìm kiếm web cho: "${query}"\n`;
+          output += `Tìm thấy khoảng ${parseInt(totalResults).toLocaleString()} kết quả. Nội dung ${searchResults.length} trang đầu:\n\n`;
           output += "=".repeat(60) + "\n\n";
 
           for (let i = 0; i < searchResults.length; i++) {
             const r = searchResults[i];
             const content = pageContents[i];
-            output += `[Source ${i + 1}] ${r.title}\n`;
+            output += `[Nguồn ${i + 1}] ${r.title}\n`;
             output += `URL: ${r.url}\n`;
+            if (r.date) output += `Ngày: ${r.date}\n`;
             if (content) {
-              output += `\nCONTENT:\n${content}\n`;
+              output += `\nNỘI DUNG:\n${content}\n`;
             } else {
-              // Fallback to snippet if page fetch failed
-              output += `\nSNIPPET (page could not be fetched): ${r.snippet}\n`;
+              // Fallback to snippet when page fetch failed
+              output += `\nTÓM TẮT (không thể tải trang): ${r.snippet}\n`;
             }
             output += "\n" + "-".repeat(60) + "\n\n";
           }
 
-          // Total limit to avoid overflowing context window
+          // Cap total output to avoid overflowing context window
           const TOTAL_MAX = 12000;
           if (output.length > TOTAL_MAX) {
-            output = output.substring(0, TOTAL_MAX) + "\n\n... [TRUNCATED — context limit reached]";
+            output = output.substring(0, TOTAL_MAX) + "\n\n... [ĐÃ GIỚI HẠN — đạt giới hạn ngữ cảnh]";
           }
 
           return JSON.stringify({ result: output });
         } catch (e) {
           console.error("Google Search error:", e);
-          return JSON.stringify({ error: `Google Search failed: ${e.message}` });
+          return JSON.stringify({ error: `Google Search thất bại: ${e.message}` });
         }
       };
     </script>

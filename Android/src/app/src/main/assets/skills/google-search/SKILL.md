@@ -26,15 +26,18 @@ Search the web and retrieve full content from the top result pages. Use the actu
 Step 1: Call the `run_js` tool with EXACTLY these parameters:
 - skill name: `google-search`
 - script name: `index.html`
-- data: a JSON string with field `query` containing the search query
+- data: a JSON string with the following fields:
+  - `query`: Required. The search query string.
+  - `num`: Optional. Number of results to fetch (1–10). Default: 5.
+  - `lang`: Optional. Two-letter language code (e.g. "vi", "en"). Default: "vi".
 
 Example call:
 - skill name: google-search
 - script name: index.html
 - data: {"query": "giá vàng hôm nay", "num": 5, "lang": "vi"}
 
-Step 2: Wait for the tool to return. The result contains full web page content from top sources.
+Step 2: Wait for the tool to return. The result contains full web page content from top sources under `[Nguồn N]` sections.
 
-Step 3: Read the content from each `[Source N]` section carefully. Use the **actual text from the pages** to answer. Extract specific facts, numbers, dates directly from the content. Do NOT say you cannot access the internet — the tool already fetched the data for you.
+Step 3: Read the content from each `[Nguồn N]` section carefully. Use the **actual text from the pages** to answer. Extract specific facts, numbers, dates directly from the content. Do NOT say you cannot access the internet — the tool already fetched the data for you.
 
-Step 4: Cite sources. Respond in the same language as the user.
+Step 4: Cite sources (URL). Respond in the same language as the user.
