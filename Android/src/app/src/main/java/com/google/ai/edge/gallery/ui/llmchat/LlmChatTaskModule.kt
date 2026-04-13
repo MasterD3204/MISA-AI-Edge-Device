@@ -41,6 +41,8 @@ import com.google.ai.edge.gallery.data.Category
 import com.google.ai.edge.gallery.data.Model
 import com.google.ai.edge.gallery.data.Task
 import com.google.ai.edge.gallery.runtime.runtimeHelper
+import com.google.ai.edge.gallery.ui.common.chat.ChatMessageText
+import com.google.ai.edge.gallery.ui.common.chat.ChatSide
 import com.google.ai.edge.gallery.ui.common.chat.ChatVoiceBar
 import com.google.ai.edge.gallery.ui.common.chat.SendMessageTrigger
 import com.google.ai.edge.gallery.ui.common.chat.rememberPiperTtsEngine
@@ -130,6 +132,7 @@ class LlmChatTask @Inject constructor() : CustomTask {
     val myData = data as CustomTaskDataForBuiltinTask
     val context = LocalContext.current
     val viewModel: LlmChatViewModel = hiltViewModel()
+    val uiState by viewModel.uiState.collectAsState()
 
     val ttsEngine = rememberPiperTtsEngine(context)
     var ttsEnabled by remember { mutableStateOf(false) }
