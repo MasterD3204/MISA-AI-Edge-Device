@@ -54,7 +54,7 @@ class PiperTtsEngine(
     private val tokensName: String = "tokens.txt",
     private val espDataDir: String = "vits-piper-vi-huongly/espeak-ng-data",
     private val speakerId: Int     = 0,
-    private val speed: Float       = 0.85f,
+    private val speed: Float       = 0.7f,
     private val numThreads: Int    = 2,
 ) {
     companion object {
@@ -261,6 +261,7 @@ class PiperTtsEngine(
     fun speak(text: String) {
         if (tts == null || text.isBlank()) return
         val processed = preProcessor?.process(text) ?: text
+        Log.i(TAG, "📢 [TTS INPUT] \"${processed.trim()}\"")
         enqueueChunk(processed.trim())
     }
 
@@ -275,7 +276,10 @@ class PiperTtsEngine(
         val chunks = acc.feed(partial)
         chunks.forEach { chunk ->
             val processed = preProcessor?.process(chunk) ?: chunk
-            if (processed.isNotBlank()) enqueueChunk(processed.trim())
+            if (processed.isNotBlank()) {
+                Log.i(TAG, "📢 [TTS INPUT] \"${processed.trim()}\"")
+                enqueueChunk(processed.trim())
+            }
         }
     }
 
@@ -288,7 +292,10 @@ class PiperTtsEngine(
         val remaining = acc.flush()
         if (!remaining.isNullOrBlank()) {
             val processed = preProcessor?.process(remaining) ?: remaining
-            if (processed.isNotBlank()) enqueueChunk(processed.trim())
+            if (processed.isNotBlank()) {
+                Log.i(TAG, "📢 [TTS INPUT] \"${processed.trim()}\"")
+                enqueueChunk(processed.trim())
+            }
         }
     }
 

@@ -1,5 +1,7 @@
 package com.google.ai.edge.gallery.voicechat
 
+import android.util.Log
+
 /**
  * Tích lũy text streaming từ LLM, cắt thành chunk đủ dài để đưa vào TTS.
  *
@@ -13,7 +15,12 @@ package com.google.ai.edge.gallery.voicechat
  */
 class StreamingChunkAccumulator(private val minWords: Int = 7) {
 
+    companion object {
+        private const val TAG = "ChunkAccumulator"
+    }
+
     private val buffer = StringBuilder()
+    private var chunkCounter = 0
 
     /**
      * Nạp thêm partial text, trả về danh sách chunk đã sẵn sàng cho TTS.
@@ -21,7 +28,11 @@ class StreamingChunkAccumulator(private val minWords: Int = 7) {
      */
     fun feed(partial: String): List<String> {
         buffer.append(normalizePunctuation(partial))
-        return extractReadyChunks()
+        val chunks = extractReadyChunks()
+        chunks.forEach { chunk ->
+            Log.i(TAG, "✂ Chunk #${chunkCounter++} cắt: \"$chunk\" (${wordCount(chunk)} từ)")
+        }
+        return chunks
     }
 
     /**
@@ -32,8 +43,9 @@ class StreamingChunkAccumulator(private val minWords: Int = 7) {
         val remaining = buffer.toString().trim()
         buffer.clear()
         if (remaining.isEmpty()) return null
-        // Normalize dấu cuối thành chấm
-        return ensureTerminalDot(remaining)
+        val result = ensureTerminalDot(remaining)
+        Log.i(TAG, "✂ Chunk #${chunkCounter++} flush: \"$result\" (${wordCount(result)} từ)")
+        return result
     }
 
     // ── Private ──────────────────────────────────────────────────────────────
@@ -76,7 +88,9 @@ class StreamingChunkAccumulator(private val minWords: Int = 7) {
 
             if (wordCount(candidate) < minWords) {
                 // Chunk ngắn → đổi dấu cuối . thành , rồi giữ làm carry
-                carry = replaceTerminalDotWithComma(candidate)
+                val merged = replaceTerminalDotWithComma(candidate)
+                Log.d(TAG, "   ↩ Chunk ngắn (${wordCount(candidate)} từ < $minWords), ghép tiếp: \"$merged\"")
+                carry = merged
             } else {
                 // Chunk đủ dài → normalize dấu cuối thành .
                 result.add(ensureTerminalDot(carry.let {
