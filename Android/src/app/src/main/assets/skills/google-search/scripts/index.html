@@ -108,7 +108,7 @@ Licensed under the Apache License, Version 2.0
             const text = formatTextForLLM(rawText);
             if (text && text.length > 150) {
               console.log(`[google-search] ${label} ✅ Proxy ${proxyName} thành công (${elapsed}ms) — ${text.length} ký tự`);
-              console.log(`[google-search] ${label} Nội dung (200 ký tự đầu): ${text.substring(0, 200).replace(/\n/g, " ")}...`);
+              console.log(`[google-search] ${label} ====== TOÀN BỘ NỘI DUNG TRANG ======\n${text}\n====== HẾT NỘI DUNG [Nguồn ${sourceIndex}] ======`);
               return text;
             } else {
               console.log(`[google-search] ${label} Proxy ${proxyName} nội dung quá ngắn (${text?.length ?? 0} ký tự) — thử proxy tiếp`);
@@ -300,6 +300,7 @@ Licensed under the Apache License, Version 2.0
           }
 
           console.log(`[google-search] 🏁 Hoàn tất — output ${output.length} ký tự gửi cho LLM`);
+          console.log(`[google-search] ====== TOÀN BỘ OUTPUT GỬI CHO LLM ======\n${output}\n====== HẾT OUTPUT ======`);
 
           return JSON.stringify({ result: output });
         } catch (e) {

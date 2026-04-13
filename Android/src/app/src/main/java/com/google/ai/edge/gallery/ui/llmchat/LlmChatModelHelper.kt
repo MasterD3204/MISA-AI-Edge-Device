@@ -140,6 +140,9 @@ object LlmChatModelHelper : LlmModelHelper {
             tools = tools,
           )
         )
+      Log.d(TAG, "====== SYSTEM INSTRUCTION ======")
+      Log.d(TAG, systemInstruction?.toString() ?: "(none)")
+      Log.d(TAG, "====== HẾT SYSTEM INSTRUCTION ======")
       ExperimentalFlags.enableConversationConstrainedDecoding = false
       model.instance = LlmModelInstance(engine = engine, conversation = conversation)
     } catch (e: Exception) {
@@ -275,6 +278,17 @@ object LlmChatModelHelper : LlmModelHelper {
     if (input.trim().isNotEmpty()) {
       contents.add(Content.Text(input))
     }
+
+    // Log toàn bộ input text gửi cho LLM (bao gồm tool result nếu có)
+    Log.d(TAG, "====== INPUT GỬI CHO LLM ======")
+    Log.d(TAG, "images=${images.size}, audioClips=${audioClips.size}")
+    if (input.isNotEmpty()) {
+      // Chia nhỏ để tránh logcat cắt dòng dài
+      input.chunked(3000).forEachIndexed { i, chunk ->
+        Log.d(TAG, "[input-chunk-${i + 1}] $chunk")
+      }
+    }
+    Log.d(TAG, "====== HẾT INPUT ======")
 
     conversation.sendMessageAsync(
       Contents.of(contents),
